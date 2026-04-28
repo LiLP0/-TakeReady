@@ -619,12 +619,6 @@ select {
   width: fit-content;
 }
 
-.scripts-import-button.is-disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-  pointer-events: none;
-}
-
 .script-card {
   display: grid;
   gap: 1rem;

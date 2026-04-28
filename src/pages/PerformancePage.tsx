@@ -80,7 +80,9 @@ function isInteractiveShortcutTarget(target: EventTarget | null): boolean {
   }
 
   return (
-    target.closest('input, textarea, select, button, [contenteditable]') !== null
+    target.closest(
+      'a[href], button, input, textarea, select, [contenteditable], [role="button"], [role="link"]',
+    ) !== null
   );
 }
 

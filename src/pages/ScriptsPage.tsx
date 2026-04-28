@@ -1,4 +1,4 @@
-import { type ChangeEvent, useEffect, useState } from 'react';
+import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { PageShell } from '../components/PageShell';
@@ -207,10 +207,14 @@ function formatLibraryLoadErrorMessage(
   libraryLoadError: LibraryLoadError,
 ): string {
   if (libraryLoadError.code === 'malformed_library') {
-    return 'TakeReady found saved library data but could not read it. Import a TakeReady JSON backup from above, or create and save a new script to rebuild the local library.';
+    return 'TakeReady found saved library data but could not read it. Write actions are temporarily blocked to avoid overwriting recoverable data. Export any readable scripts first, then recover or intentionally replace the saved library before importing a backup.';
   }
 
   return 'TakeReady could not read your saved library.';
+}
+
+function getWriteBlockedStatusMessage(): string {
+  return 'Write actions are temporarily blocked while TakeReady protects unreadable saved library data. Export any readable scripts first, then recover or intentionally replace the saved library before importing a backup.';
 }
 
 export function ScriptsPage() {
@@ -220,8 +224,10 @@ export function ScriptsPage() {
     clearProjectCleanupSummary,
     consumeProjectCleanupSummary,
     deleteProject,
+    isLibraryWriteBlocked,
     libraryLoadError,
     loadProjects,
+    projectCleanupSummary,
     projects,
     save,
   } = useScriptStorage();
@@ -238,27 +244,33 @@ export function ScriptsPage() {
     null,
   );
   const [isImporting, setIsImporting] = useState(false);
-  const [loadCleanupMessage, setLoadCleanupMessage] = useState<string | null>(
+  const [cleanupMessage, setCleanupMessage] = useState<string | null>(
     null,
   );
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const sortedProjects = sortProjects(projects, sortMode);
   const filteredProjects = filterProjectsByTitle(sortedProjects, searchTerm);
 
   function clearCleanupNotice(): void {
     clearProjectCleanupSummary();
-    setLoadCleanupMessage(null);
+    setCleanupMessage(null);
   }
 
   useEffect(() => {
     loadProjects();
-    const cleanupSummary = consumeProjectCleanupSummary();
-
-    setLoadCleanupMessage(
-      cleanupSummary?.source === 'load'
-        ? formatLoadCleanupMessage(cleanupSummary)
-        : null,
-    );
   }, []);
+
+  useEffect(() => {
+    if (!projectCleanupSummary) {
+      return;
+    }
+
+    if (projectCleanupSummary.source === 'load') {
+      setCleanupMessage(formatLoadCleanupMessage(projectCleanupSummary));
+    }
+
+    clearProjectCleanupSummary();
+  }, [projectCleanupSummary]);
 
   function handleOpenEditor(projectId: string): void {
     clearCleanupNotice();
@@ -277,13 +289,34 @@ export function ScriptsPage() {
   function handleDelete(projectId: string): void {
     clearCleanupNotice();
 
+    if (isLibraryWriteBlocked) {
+      setLibraryStatus({
+        message: getWriteBlockedStatusMessage(),
+        type: 'error',
+      });
+      return;
+    }
+
     if (pendingDeleteProjectId !== projectId) {
       setPendingDeleteProjectId(projectId);
       setLibraryStatus(null);
       return;
     }
 
-    deleteProject(projectId);
+    const didDelete = deleteProject(projectId);
+
+    if (didDelete === 'blocked') {
+      setLibraryStatus({
+        message: getWriteBlockedStatusMessage(),
+        type: 'error',
+      });
+      return;
+    }
+
+    if (didDelete !== 'success') {
+      return;
+    }
+
     setPendingDeleteProjectId(null);
     setRenamingProjectId(null);
     setLibraryStatus(null);
@@ -303,7 +336,29 @@ export function ScriptsPage() {
 
   function handleDuplicate(project: ScriptProject): void {
     clearCleanupNotice();
-    save(duplicateProject(project, projects));
+
+    if (isLibraryWriteBlocked) {
+      setLibraryStatus({
+        message: getWriteBlockedStatusMessage(),
+        type: 'error',
+      });
+      return;
+    }
+
+    const didSave = save(duplicateProject(project, projects));
+
+    if (didSave === 'blocked') {
+      setLibraryStatus({
+        message: getWriteBlockedStatusMessage(),
+        type: 'error',
+      });
+      return;
+    }
+
+    if (didSave !== 'success') {
+      return;
+    }
+
     setPendingDeleteProjectId(null);
     setRenamingProjectId(null);
     setLibraryStatus(null);
@@ -311,6 +366,15 @@ export function ScriptsPage() {
 
   function handleStartRename(project: ScriptProject): void {
     clearCleanupNotice();
+
+    if (isLibraryWriteBlocked) {
+      setLibraryStatus({
+        message: getWriteBlockedStatusMessage(),
+        type: 'error',
+      });
+      return;
+    }
+
     setRenamingProjectId(project.id);
     setRenameTitle(project.title);
     setPendingDeleteProjectId(null);
@@ -325,14 +389,36 @@ export function ScriptsPage() {
 
   function handleSaveRename(project: ScriptProject): void {
     clearCleanupNotice();
+
+    if (isLibraryWriteBlocked) {
+      setLibraryStatus({
+        message: getWriteBlockedStatusMessage(),
+        type: 'error',
+      });
+      return;
+    }
+
     const now = new Date().toISOString();
     const nextTitle = renameTitle.trim() || 'Untitled script';
 
-    save({
+    const didSave = save({
       ...project,
       title: nextTitle,
       updatedAt: now,
     });
+
+    if (didSave === 'blocked') {
+      setLibraryStatus({
+        message: getWriteBlockedStatusMessage(),
+        type: 'error',
+      });
+      return;
+    }
+
+    if (didSave !== 'success') {
+      return;
+    }
+
     setRenamingProjectId(null);
     setRenameTitle('');
     setPendingDeleteProjectId(null);
@@ -398,6 +484,16 @@ export function ScriptsPage() {
     }
 
     clearCleanupNotice();
+
+    if (isLibraryWriteBlocked) {
+      setLibraryStatus({
+        message: getWriteBlockedStatusMessage(),
+        type: 'error',
+      });
+      input.value = '';
+      return;
+    }
+
     setIsImporting(true);
     setLibraryStatus(null);
 
@@ -412,7 +508,15 @@ export function ScriptsPage() {
 
       const didSaveImportedProjects = saveImportedProjects(importedProjects);
 
-      if (!didSaveImportedProjects) {
+      if (didSaveImportedProjects === 'blocked') {
+        setLibraryStatus({
+          message: getWriteBlockedStatusMessage(),
+          type: 'error',
+        });
+        return;
+      }
+
+      if (didSaveImportedProjects !== 'success') {
         throw new Error('BitFeeder import could not be saved');
       }
 
@@ -443,6 +547,22 @@ export function ScriptsPage() {
     navigate('/');
   }
 
+  function handleCreateNewScript(): void {
+    clearCleanupNotice();
+    setPendingDeleteProjectId(null);
+    setRenamingProjectId(null);
+    setLibraryStatus(null);
+    navigate('/editor/new');
+  }
+
+  function handleOpenImportPicker(): void {
+    if (isImporting || isLibraryWriteBlocked) {
+      return;
+    }
+
+    importInputRef.current?.click();
+  }
+
   return (
     <PageShell
       description="Review your saved TakeReady scripts and open the one you want to edit or record."
@@ -451,6 +571,13 @@ export function ScriptsPage() {
       <section className="panel scripts-toolbar" aria-label="Script library tools">
         <div className="scripts-library-actions">
           <button
+            className="text-link is-primary"
+            onClick={handleCreateNewScript}
+            type="button"
+          >
+            Create New Script
+          </button>
+          <button
             className="text-link"
             disabled={projects.length === 0}
             onClick={handleExportAll}
@@ -458,21 +585,27 @@ export function ScriptsPage() {
           >
             Export All
           </button>
-          <label
-            aria-disabled={isImporting}
-            className={`text-link scripts-import-button ${
-              isImporting ? 'is-disabled' : ''
-            }`}
-            htmlFor="script-import"
+          <button
+            className="text-link scripts-import-button"
+            disabled={isImporting || isLibraryWriteBlocked}
+            onClick={handleOpenImportPicker}
+            title={
+              isLibraryWriteBlocked
+                ? 'Import is temporarily blocked while unreadable saved library data is protected from overwrite.'
+                : undefined
+            }
+            type="button"
           >
             {isImporting ? 'Importing...' : 'Import'}
-          </label>
+          </button>
           <input
             accept="application/json,.json"
             className="visually-hidden"
-            disabled={isImporting}
+            disabled={isImporting || isLibraryWriteBlocked}
             id="script-import"
             onChange={handleImportFile}
+            ref={importInputRef}
+            tabIndex={-1}
             type="file"
           />
         </div>
@@ -522,9 +655,9 @@ export function ScriptsPage() {
           </p>
         ) : null}
 
-        {loadCleanupMessage ? (
+        {cleanupMessage ? (
           <p aria-live="polite" className="status-message is-success">
-            {loadCleanupMessage}
+            {cleanupMessage}
           </p>
         ) : null}
 
@@ -660,7 +793,13 @@ export function ScriptsPage() {
                           <>
                             <button
                               className="text-link is-primary"
+                              disabled={isLibraryWriteBlocked}
                               onClick={() => handleSaveRename(project)}
+                              title={
+                                isLibraryWriteBlocked
+                                  ? 'Rename is temporarily blocked while unreadable saved library data is protected from overwrite.'
+                                  : undefined
+                              }
                               type="button"
                             >
                               Save Rename
@@ -676,7 +815,13 @@ export function ScriptsPage() {
                         ) : (
                           <button
                             className="text-link"
+                            disabled={isLibraryWriteBlocked}
                             onClick={() => handleStartRename(project)}
+                            title={
+                              isLibraryWriteBlocked
+                                ? 'Rename is temporarily blocked while unreadable saved library data is protected from overwrite.'
+                                : undefined
+                            }
                             type="button"
                           >
                             Rename
@@ -691,7 +836,13 @@ export function ScriptsPage() {
                         </button>
                         <button
                           className="text-link"
+                          disabled={isLibraryWriteBlocked}
                           onClick={() => handleDuplicate(project)}
+                          title={
+                            isLibraryWriteBlocked
+                              ? 'Duplicate is temporarily blocked while unreadable saved library data is protected from overwrite.'
+                              : undefined
+                          }
                           type="button"
                         >
                           Duplicate
@@ -700,7 +851,13 @@ export function ScriptsPage() {
                           className={`text-link ${
                             isConfirmingDelete ? 'is-danger' : ''
                           }`}
+                          disabled={isLibraryWriteBlocked}
                           onClick={() => handleDelete(project.id)}
+                          title={
+                            isLibraryWriteBlocked
+                              ? 'Delete is temporarily blocked while unreadable saved library data is protected from overwrite.'
+                              : undefined
+                          }
                           type="button"
                         >
                           {isConfirmingDelete ? 'Confirm Delete' : 'Delete'}

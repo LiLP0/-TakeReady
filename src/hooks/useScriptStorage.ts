@@ -9,7 +9,9 @@ import {
   consumeLastProjectCleanupSummary,
   deleteProject as deleteStoredProject,
   getLastLibraryLoadError,
+  getLastProjectCleanupSummary,
   type LibraryLoadError,
+  type LibraryWriteResult,
   loadProject as loadStoredProject,
   loadProjects as loadStoredProjects,
   loadScriptFocusModeSettings as loadStoredScriptFocusModeSettings,
@@ -20,6 +22,8 @@ import {
 
 export type UseScriptStorageResult = {
   libraryLoadError: LibraryLoadError | null;
+  isLibraryWriteBlocked: boolean;
+  projectCleanupSummary: ProjectCleanupSummary | null;
   projects: ScriptProject[];
   project: ScriptProject | null;
   scriptFocusModeSettings: ScriptFocusModeSettings;
@@ -29,9 +33,9 @@ export type UseScriptStorageResult = {
   loadProject: (projectId: string) => ScriptProject | null;
   loadScriptFocusModeSettings: () => ScriptFocusModeSettings;
   saveScriptFocusModeSettings: (settings: ScriptFocusModeSettings) => void;
-  save: (project: ScriptProject) => void;
+  save: (project: ScriptProject) => LibraryWriteResult;
   load: () => ScriptProject | null;
-  deleteProject: (projectId: string) => void;
+  deleteProject: (projectId: string) => LibraryWriteResult;
   clear: () => void;
 };
 
@@ -54,23 +58,30 @@ export function useScriptStorage(): UseScriptStorageResult {
   );
   const [libraryLoadError, setLibraryLoadError] =
     useState<LibraryLoadError | null>(() => getLastLibraryLoadError());
+  const [projectCleanupSummary, setProjectCleanupSummary] =
+    useState<ProjectCleanupSummary | null>(() => getLastProjectCleanupSummary());
   const [scriptFocusModeSettings, setScriptFocusModeSettings] =
     useState<ScriptFocusModeSettings>(() => loadStoredScriptFocusModeSettings());
   const project = getLatestProject(projects);
+  const isLibraryWriteBlocked = libraryLoadError?.code === 'malformed_library';
 
   function refreshProjects(): ScriptProject[] {
     const storedProjects = loadStoredProjects();
     setProjects(storedProjects);
     setLibraryLoadError(getLastLibraryLoadError());
+    setProjectCleanupSummary(getLastProjectCleanupSummary());
     return storedProjects;
   }
 
   function clearProjectCleanupSummary(): void {
     clearLastProjectCleanupSummary();
+    setProjectCleanupSummary(null);
   }
 
   function consumeProjectCleanupSummary(): ProjectCleanupSummary | null {
-    return consumeLastProjectCleanupSummary();
+    const summary = consumeLastProjectCleanupSummary();
+    setProjectCleanupSummary(null);
+    return summary;
   }
 
   function loadProjects(): ScriptProject[] {
@@ -96,18 +107,20 @@ export function useScriptStorage(): UseScriptStorageResult {
     setScriptFocusModeSettings(loadStoredScriptFocusModeSettings());
   }
 
-  function save(projectToSave: ScriptProject): void {
-    saveProject(projectToSave);
+  function save(projectToSave: ScriptProject): LibraryWriteResult {
+    const didSave = saveProject(projectToSave);
     refreshProjects();
+    return didSave;
   }
 
   function load(): ScriptProject | null {
     return getLatestProject(refreshProjects());
   }
 
-  function deleteProject(projectId: string): void {
-    deleteStoredProject(projectId);
+  function deleteProject(projectId: string): LibraryWriteResult {
+    const didDelete = deleteStoredProject(projectId);
     refreshProjects();
+    return didDelete;
   }
 
   function clear(): void {
@@ -120,6 +133,8 @@ export function useScriptStorage(): UseScriptStorageResult {
 
   return {
     libraryLoadError,
+    isLibraryWriteBlocked,
+    projectCleanupSummary,
     projects,
     project,
     scriptFocusModeSettings,

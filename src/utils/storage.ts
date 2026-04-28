@@ -54,6 +54,8 @@ export type LibraryLoadError = {
   code: 'malformed_library';
 };
 
+export type LibraryWriteResult = 'blocked' | 'failed' | 'success';
+
 type RawScriptSectionRecord = {
   chunks: unknown[];
   description: string;
@@ -552,6 +554,13 @@ function readProjectCollection(storage: Storage): {
   }
 }
 
+function isTopLevelLibraryWriteBlocked(storage: Storage): boolean {
+  return (
+    readProjectCollection(storage).libraryLoadError?.code ===
+    'malformed_library'
+  );
+}
+
 function readLegacyProject(storage: Storage): MigratedProjectResult | null {
   const rawProject = storage.getItem(LEGACY_BITFEEDER_PROJECT_STORAGE_KEY);
 
@@ -579,19 +588,26 @@ function persistProjects(storage: Storage, projects: ScriptProject[]): void {
   }
 }
 
-export function saveProject(project: ScriptProject): void {
+export function saveProject(project: ScriptProject): LibraryWriteResult {
   const storage = getStorage();
 
   if (!storage) {
-    return;
+    return 'failed';
   }
 
   try {
+    if (isTopLevelLibraryWriteBlocked(storage)) {
+      setLastLibraryLoadError(createMalformedLibraryLoadError());
+      return 'blocked';
+    }
+
     const projects = loadProjects();
     writeProjects(storage, upsertProject(projects, project));
     storage.removeItem(LEGACY_BITFEEDER_PROJECT_STORAGE_KEY);
+    return 'success';
   } catch {
     // Ignore storage write failures and keep the app stable.
+    return 'failed';
   }
 }
 
@@ -627,14 +643,21 @@ export function parseImportedProjects(value: unknown): ScriptProject[] | null {
   return [migratedProject.project];
 }
 
-export function saveImportedProjects(projectsToImport: ScriptProject[]): boolean {
+export function saveImportedProjects(
+  projectsToImport: ScriptProject[],
+): LibraryWriteResult {
   const storage = getStorage();
 
   if (!storage || projectsToImport.length === 0) {
-    return false;
+    return 'failed';
   }
 
   try {
+    if (isTopLevelLibraryWriteBlocked(storage)) {
+      setLastLibraryLoadError(createMalformedLibraryLoadError());
+      return 'blocked';
+    }
+
     const projects = projectsToImport.reduce(
       (nextProjects, project) => upsertProject(nextProjects, project),
       loadProjects(),
@@ -642,10 +665,10 @@ export function saveImportedProjects(projectsToImport: ScriptProject[]): boolean
 
     writeProjects(storage, projects);
     storage.removeItem(LEGACY_BITFEEDER_PROJECT_STORAGE_KEY);
-    return true;
+    return 'success';
   } catch {
     // Ignore import write failures and keep the app stable.
-    return false;
+    return 'failed';
   }
 }
 
@@ -704,6 +727,8 @@ export function loadProjects(): ScriptProject[] {
 
   try {
     const collection = readProjectCollection(storage);
+    const isTopLevelLibraryUnreadable =
+      collection.libraryLoadError?.code === 'malformed_library';
     const hasLegacyProject =
       storage.getItem(LEGACY_BITFEEDER_PROJECT_STORAGE_KEY) !== null;
     const legacyProject = readLegacyProject(storage);
@@ -716,12 +741,14 @@ export function loadProjects(): ScriptProject[] {
       filteredChunkCount += legacyProject.filteredChunkCount;
     }
 
-    if (hasLegacyProject) {
-      storage.removeItem(LEGACY_BITFEEDER_PROJECT_STORAGE_KEY);
-    }
+    if (!isTopLevelLibraryUnreadable) {
+      if (hasLegacyProject) {
+        storage.removeItem(LEGACY_BITFEEDER_PROJECT_STORAGE_KEY);
+      }
 
-    if (collection.shouldPersist || hasLegacyProject) {
-      persistProjects(storage, projects);
+      if (collection.shouldPersist || hasLegacyProject) {
+        persistProjects(storage, projects);
+      }
     }
 
     setLastLibraryLoadError(collection.libraryLoadError);
@@ -740,20 +767,27 @@ export function loadProjects(): ScriptProject[] {
   }
 }
 
-export function deleteProject(projectId: string): void {
+export function deleteProject(projectId: string): LibraryWriteResult {
   const storage = getStorage();
 
   if (!storage) {
-    return;
+    return 'failed';
   }
 
   try {
+    if (isTopLevelLibraryWriteBlocked(storage)) {
+      setLastLibraryLoadError(createMalformedLibraryLoadError());
+      return 'blocked';
+    }
+
     const projects = loadProjects().filter(
       (project) => project.id !== projectId,
     );
     writeProjects(storage, projects);
+    return 'success';
   } catch {
     // Ignore storage delete failures and keep the app stable.
+    return 'failed';
   }
 }
 

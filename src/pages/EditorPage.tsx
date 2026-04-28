@@ -172,7 +172,7 @@ export function EditorPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId: routeProjectId } = useParams();
-  const { load, loadProject, save } = useScriptStorage();
+  const { isLibraryWriteBlocked, load, loadProject, save } = useScriptStorage();
   const isNewProjectRoute = location.pathname === '/editor/new';
   const [title, setTitle] = useState('');
   const [rawScript, setRawScript] = useState('');
@@ -325,6 +325,13 @@ export function EditorPage() {
   }
 
   function handleSaveScript(): void {
+    if (isLibraryWriteBlocked) {
+      setStatusMessage(
+        'Saved library data could not be read. Saving is temporarily blocked to avoid overwriting recoverable data. Use Scripts to recover or intentionally replace the library first.',
+      );
+      return;
+    }
+
     const now = new Date().toISOString();
     const nextProjectId = projectId ?? createProjectId();
     const nextCreatedAt = createdAt ?? now;
@@ -346,7 +353,19 @@ export function EditorPage() {
       sessionNotes,
     };
 
-    save(nextProject);
+    const didSave = save(nextProject);
+
+    if (didSave === 'blocked') {
+      setStatusMessage(
+        'Saved library data could not be read. Saving is temporarily blocked to avoid overwriting recoverable data. Use Scripts to recover or intentionally replace the library first.',
+      );
+      return;
+    }
+
+    if (didSave !== 'success') {
+      return;
+    }
+
     setProjectId(nextProjectId);
     setCreatedAt(nextCreatedAt);
     setSectionTemplates(createSectionTemplates(nextSections));
@@ -594,6 +613,14 @@ export function EditorPage() {
             </p>
           ) : null}
 
+          {isLibraryWriteBlocked ? (
+            <p aria-live="polite" className="status-message is-error">
+              Saved library data could not be read. Saving is temporarily
+              blocked to avoid overwriting recoverable data. Open Scripts before
+              replacing the library.
+            </p>
+          ) : null}
+
           <p
             aria-live="polite"
             className={`editor-save-state ${
@@ -640,7 +667,13 @@ export function EditorPage() {
             ) : null}
             <button
               className="text-link is-primary"
+              disabled={isLibraryWriteBlocked}
               onClick={handleSaveScript}
+              title={
+                isLibraryWriteBlocked
+                  ? 'Saving is temporarily blocked while unreadable saved library data is protected from overwrite.'
+                  : undefined
+              }
               type="button"
             >
               Save Script
