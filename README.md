@@ -1,10 +1,10 @@
-# BitFeeder
+# TakeReady
 
 ## Project Name
-BitFeeder
+TakeReady
 
 ## What the app does
-BitFeeder is a responsive web app for YouTube creators that turns rough scripts into performance-friendly chunks for easier recording. It is built for comedy timing, commentary videos, explainer content, and semi-improvised delivery rather than generic business teleprompting.
+TakeReady is a responsive web app for YouTube creators that turns rough scripts into performance-friendly chunks for easier recording. It is built for comedy timing, commentary videos, explainer content, and semi-improvised delivery rather than generic business teleprompting.
 
 ## Core Idea
 Help creators shape messy draft writing into readable beats that are easier to perform on camera without losing rhythm, personality, or natural delivery.

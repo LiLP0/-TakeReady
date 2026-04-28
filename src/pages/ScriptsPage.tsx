@@ -6,7 +6,8 @@ import { usePageTitle } from '../hooks/usePageTitle';
 import { useScriptStorage } from '../hooks/useScriptStorage';
 import type { ScriptProject } from '../types/script';
 import {
-  getLastProjectCleanupSummary,
+  compareDateStringsDescending,
+  type LibraryLoadError,
   parseImportedProjects,
   type ProjectCleanupSummary,
   saveImportedProjects,
@@ -59,7 +60,10 @@ function sortProjects(
       );
     }
 
-    return secondProject.updatedAt.localeCompare(firstProject.updatedAt);
+    return compareDateStringsDescending(
+      firstProject.updatedAt,
+      secondProject.updatedAt,
+    );
   });
 }
 
@@ -180,7 +184,7 @@ function formatCleanupDetails(summary: ProjectCleanupSummary): string {
 }
 
 function formatLoadCleanupMessage(summary: ProjectCleanupSummary): string {
-  return `BitFeeder cleaned up your saved library while loading it. ${formatCleanupDetails(summary)}.`;
+  return `TakeReady cleaned up your saved library while loading it. ${formatCleanupDetails(summary)}.`;
 }
 
 function formatImportSuccessMessage(
@@ -196,16 +200,28 @@ function formatImportSuccessMessage(
     return importedProjectsLabel;
   }
 
-  return `${importedProjectsLabel} BitFeeder cleaned the import so the usable data stayed intact: ${formatCleanupDetails(cleanupSummary)}.`;
+  return `${importedProjectsLabel} TakeReady cleaned the import so the usable data stayed intact: ${formatCleanupDetails(cleanupSummary)}.`;
+}
+
+function formatLibraryLoadErrorMessage(
+  libraryLoadError: LibraryLoadError,
+): string {
+  if (libraryLoadError.code === 'malformed_library') {
+    return 'TakeReady found saved library data but could not read it. Import a TakeReady JSON backup from above, or create and save a new script to rebuild the local library.';
+  }
+
+  return 'TakeReady could not read your saved library.';
 }
 
 export function ScriptsPage() {
   usePageTitle('Scripts');
   const navigate = useNavigate();
   const {
+    clearProjectCleanupSummary,
+    consumeProjectCleanupSummary,
     deleteProject,
+    libraryLoadError,
     loadProjects,
-    projectCleanupSummary,
     projects,
     save,
   } = useScriptStorage();
@@ -222,30 +238,45 @@ export function ScriptsPage() {
     null,
   );
   const [isImporting, setIsImporting] = useState(false);
+  const [loadCleanupMessage, setLoadCleanupMessage] = useState<string | null>(
+    null,
+  );
   const sortedProjects = sortProjects(projects, sortMode);
   const filteredProjects = filterProjectsByTitle(sortedProjects, searchTerm);
-  const loadCleanupMessage =
-    projectCleanupSummary?.source === 'load'
-      ? formatLoadCleanupMessage(projectCleanupSummary)
-      : null;
+
+  function clearCleanupNotice(): void {
+    clearProjectCleanupSummary();
+    setLoadCleanupMessage(null);
+  }
 
   useEffect(() => {
     loadProjects();
+    const cleanupSummary = consumeProjectCleanupSummary();
+
+    setLoadCleanupMessage(
+      cleanupSummary?.source === 'load'
+        ? formatLoadCleanupMessage(cleanupSummary)
+        : null,
+    );
   }, []);
 
   function handleOpenEditor(projectId: string): void {
+    clearCleanupNotice();
     setPendingDeleteProjectId(null);
     setRenamingProjectId(null);
     navigate(`/editor/${projectId}`);
   }
 
   function handleOpenPerformance(projectId: string): void {
+    clearCleanupNotice();
     setPendingDeleteProjectId(null);
     setRenamingProjectId(null);
     navigate(`/performance/${projectId}`);
   }
 
   function handleDelete(projectId: string): void {
+    clearCleanupNotice();
+
     if (pendingDeleteProjectId !== projectId) {
       setPendingDeleteProjectId(projectId);
       setLibraryStatus(null);
@@ -259,16 +290,19 @@ export function ScriptsPage() {
   }
 
   function handleSearchChange(nextSearchTerm: string): void {
+    clearCleanupNotice();
     setSearchTerm(nextSearchTerm);
     setPendingDeleteProjectId(null);
   }
 
   function handleSortChange(nextSortMode: SortMode): void {
+    clearCleanupNotice();
     setSortMode(nextSortMode);
     setPendingDeleteProjectId(null);
   }
 
   function handleDuplicate(project: ScriptProject): void {
+    clearCleanupNotice();
     save(duplicateProject(project, projects));
     setPendingDeleteProjectId(null);
     setRenamingProjectId(null);
@@ -276,6 +310,7 @@ export function ScriptsPage() {
   }
 
   function handleStartRename(project: ScriptProject): void {
+    clearCleanupNotice();
     setRenamingProjectId(project.id);
     setRenameTitle(project.title);
     setPendingDeleteProjectId(null);
@@ -283,11 +318,13 @@ export function ScriptsPage() {
   }
 
   function handleCancelRename(): void {
+    clearCleanupNotice();
     setRenamingProjectId(null);
     setRenameTitle('');
   }
 
   function handleSaveRename(project: ScriptProject): void {
+    clearCleanupNotice();
     const now = new Date().toISOString();
     const nextTitle = renameTitle.trim() || 'Untitled script';
 
@@ -303,6 +340,7 @@ export function ScriptsPage() {
   }
 
   function handleExportProject(project: ScriptProject): void {
+    clearCleanupNotice();
     const scriptTitle = getScriptTitle(project);
     const filename = `${getSafeFilenamePart(scriptTitle)}.json`;
 
@@ -323,6 +361,8 @@ export function ScriptsPage() {
   }
 
   function handleExportAll(): void {
+    clearCleanupNotice();
+
     if (projects.length === 0) {
       setLibraryStatus({
         message: 'Export failed because there are no saved scripts yet.',
@@ -357,13 +397,14 @@ export function ScriptsPage() {
       return;
     }
 
+    clearCleanupNotice();
     setIsImporting(true);
     setLibraryStatus(null);
 
     try {
       const parsedJson: unknown = JSON.parse(await file.text());
       const importedProjects = parseImportedProjects(parsedJson);
-      const importCleanupSummary = getLastProjectCleanupSummary();
+      const importCleanupSummary = consumeProjectCleanupSummary();
 
       if (!importedProjects || importedProjects.length === 0) {
         throw new Error('Invalid BitFeeder import');
@@ -389,7 +430,7 @@ export function ScriptsPage() {
     } catch {
       setLibraryStatus({
         message:
-          `Import failed for ${file.name}. Choose a BitFeeder script export or full library JSON file.`,
+          `Import failed for ${file.name}. Choose a TakeReady script export or full library JSON file.`,
         type: 'error',
       });
     } finally {
@@ -404,7 +445,7 @@ export function ScriptsPage() {
 
   return (
     <PageShell
-      description="Review your saved BitFeeder scripts and open the one you want to edit or record."
+      description="Review your saved TakeReady scripts and open the one you want to edit or record."
       title="Scripts"
     >
       <section className="panel scripts-toolbar" aria-label="Script library tools">
@@ -486,9 +527,33 @@ export function ScriptsPage() {
             {loadCleanupMessage}
           </p>
         ) : null}
+
+        {libraryLoadError ? (
+          <p aria-live="polite" className="status-message is-error">
+            {formatLibraryLoadErrorMessage(libraryLoadError)}
+          </p>
+        ) : null}
       </section>
 
-      {sortedProjects.length === 0 ? (
+      {libraryLoadError && sortedProjects.length === 0 ? (
+        <section className="panel scripts-empty">
+          <h2>Saved library needs recovery</h2>
+          <p className="page-note">
+            TakeReady found saved library data but could not read it. Import a
+            saved TakeReady JSON backup from above, or create and save a new
+            script to rebuild the local library.
+          </p>
+          <div className="action-row">
+            <button
+              className="text-link"
+              onClick={handleBackHome}
+              type="button"
+            >
+              Back to Home
+            </button>
+          </div>
+        </section>
+      ) : sortedProjects.length === 0 ? (
         <section className="panel scripts-empty">
           <h2>No saved scripts yet</h2>
           <p className="page-note">
@@ -527,6 +592,7 @@ export function ScriptsPage() {
                     <div className="script-card-copy">
                       {isRenaming ? (
                         <input
+                          aria-label={`Rename script ${project.title.trim() || 'Untitled script'}`}
                           autoFocus
                           className="field-input script-rename-input"
                           onChange={(event) =>

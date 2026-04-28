@@ -342,6 +342,18 @@ function isDoneShortcut(event: globalThis.KeyboardEvent): boolean {
   return event.key === 'Enter' && (event.metaKey || event.ctrlKey);
 }
 
+function getFocusableDialogElements(rootElement: HTMLElement | null): HTMLElement[] {
+  if (!rootElement) {
+    return [];
+  }
+
+  return Array.from(
+    rootElement.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"]), [contenteditable="true"]',
+    ),
+  ).filter((element) => element.getAttribute('aria-hidden') !== 'true');
+}
+
 export function ChunkBoundaryEditor({
   rawScript,
   chunks,
@@ -362,11 +374,14 @@ export function ChunkBoundaryEditor({
     end: null,
     start: null,
   });
+  const dialogRef = useRef<HTMLDivElement | null>(null);
   const scriptViewRef = useRef<HTMLDivElement | null>(null);
   const selectedChunkElementRef = useRef<HTMLSpanElement | null>(null);
+  const titleRef = useRef<HTMLHeadingElement | null>(null);
   const draftChunksRef = useRef<ScriptChunk[]>(sortChunksByRange(chunks));
   const onCancelRef = useRef(onCancel);
   const onDoneRef = useRef(onDone);
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
   const selectedChunkIdRef = useRef<string | null>(chunks[0]?.id ?? null);
 
   useEffect(() => {
@@ -571,7 +586,74 @@ export function ChunkBoundaryEditor({
   }, [selectedChunkId]);
 
   useEffect(() => {
+    previouslyFocusedElementRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+
+    const frameId = window.requestAnimationFrame(() => {
+      if (selectedChunkElementRef.current) {
+        selectedChunkElementRef.current.focus();
+        return;
+      }
+
+      const [firstFocusableElement] = getFocusableDialogElements(dialogRef.current);
+
+      if (firstFocusableElement) {
+        firstFocusableElement.focus();
+        return;
+      }
+
+      titleRef.current?.focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+
+      if (previouslyFocusedElementRef.current?.isConnected) {
+        previouslyFocusedElementRef.current.focus();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     function handleKeyDown(event: globalThis.KeyboardEvent): void {
+      if (event.key === 'Tab') {
+        const focusableElements = getFocusableDialogElements(dialogRef.current);
+
+        if (focusableElements.length === 0) {
+          event.preventDefault();
+          titleRef.current?.focus();
+          return;
+        }
+
+        const firstFocusableElement = focusableElements[0];
+        const lastFocusableElement =
+          focusableElements[focusableElements.length - 1];
+        const activeElement =
+          document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null;
+
+        if (!activeElement || !dialogRef.current?.contains(activeElement)) {
+          event.preventDefault();
+          (event.shiftKey ? lastFocusableElement : firstFocusableElement).focus();
+          return;
+        }
+
+        if (event.shiftKey && activeElement === firstFocusableElement) {
+          event.preventDefault();
+          lastFocusableElement.focus();
+          return;
+        }
+
+        if (!event.shiftKey && activeElement === lastFocusableElement) {
+          event.preventDefault();
+          firstFocusableElement.focus();
+          return;
+        }
+      }
+
       if (isTextEntryTarget(event.target)) {
         return;
       }
@@ -711,10 +793,16 @@ export function ChunkBoundaryEditor({
         aria-labelledby="chunk-boundary-editor-title"
         aria-modal="true"
         className="modal-panel"
+        ref={dialogRef}
         role="dialog"
       >
         <div className="modal-header">
-          <h2 className="modal-title" id="chunk-boundary-editor-title">
+          <h2
+            className="modal-title"
+            id="chunk-boundary-editor-title"
+            ref={titleRef}
+            tabIndex={-1}
+          >
             Edit Chunk Boundaries
           </h2>
           <p className="page-note">

@@ -50,6 +50,10 @@ export type ProjectCleanupSummary = {
   source: 'import' | 'load';
 };
 
+export type LibraryLoadError = {
+  code: 'malformed_library';
+};
+
 type RawScriptSectionRecord = {
   chunks: unknown[];
   description: string;
@@ -63,6 +67,7 @@ type MigratedProjectResult = {
 };
 
 let lastProjectCleanupSummary: ProjectCleanupSummary | null = null;
+let lastLibraryLoadError: LibraryLoadError | null = null;
 
 function createProjectCleanupSummary(
   source: ProjectCleanupSummary['source'],
@@ -86,8 +91,68 @@ function setLastProjectCleanupSummary(
   lastProjectCleanupSummary = summary;
 }
 
+function createMalformedLibraryLoadError(): LibraryLoadError {
+  return {
+    code: 'malformed_library',
+  };
+}
+
+function setLastLibraryLoadError(error: LibraryLoadError | null): void {
+  lastLibraryLoadError = error;
+}
+
+export function clearLastProjectCleanupSummary(): void {
+  setLastProjectCleanupSummary(null);
+}
+
+export function clearLastLibraryLoadError(): void {
+  setLastLibraryLoadError(null);
+}
+
+export function consumeLastProjectCleanupSummary(): ProjectCleanupSummary | null {
+  const summary = lastProjectCleanupSummary;
+  setLastProjectCleanupSummary(null);
+  return summary;
+}
+
 export function getLastProjectCleanupSummary(): ProjectCleanupSummary | null {
   return lastProjectCleanupSummary;
+}
+
+export function getLastLibraryLoadError(): LibraryLoadError | null {
+  return lastLibraryLoadError;
+}
+
+function getParsedDateTimestamp(value: string): number | null {
+  const timestamp = Date.parse(value);
+
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+export function compareDateStringsDescending(
+  firstValue: string,
+  secondValue: string,
+): number {
+  const firstTimestamp = getParsedDateTimestamp(firstValue);
+  const secondTimestamp = getParsedDateTimestamp(secondValue);
+
+  if (firstTimestamp !== null && secondTimestamp !== null) {
+    if (firstTimestamp !== secondTimestamp) {
+      return secondTimestamp - firstTimestamp;
+    }
+
+    return secondValue.localeCompare(firstValue);
+  }
+
+  if (firstTimestamp !== null) {
+    return -1;
+  }
+
+  if (secondTimestamp !== null) {
+    return 1;
+  }
+
+  return secondValue.localeCompare(firstValue);
 }
 
 function getStorage(): Storage | null {
@@ -288,7 +353,7 @@ function isChunkTextConsistentWithRawScript(
 
 function sanitizeSectionChunks(
   section: RawScriptSectionRecord,
-  rawScript: string,
+  chunkSourceRawScript: string,
 ): {
   filteredChunkCount: number;
   section: ScriptSection;
@@ -302,12 +367,12 @@ function sanitizeSectionChunks(
       continue;
     }
 
-    if (!isChunkRangeWithinRawScript(chunkValue, rawScript)) {
+    if (!isChunkRangeWithinRawScript(chunkValue, chunkSourceRawScript)) {
       filteredChunkCount += 1;
       continue;
     }
 
-    if (!isChunkTextConsistentWithRawScript(chunkValue, rawScript)) {
+    if (!isChunkTextConsistentWithRawScript(chunkValue, chunkSourceRawScript)) {
       filteredChunkCount += 1;
       continue;
     }
@@ -355,8 +420,11 @@ function migrateScriptProject(value: unknown): MigratedProjectResult | null {
   const rawScript = isString(value.rawScript)
     ? value.rawScript
     : deriveLegacyRawScript(sections);
+  const chunkSourceRawScript = isString(value.chunkSourceRawScript)
+    ? value.chunkSourceRawScript
+    : rawScript;
   const sanitizedSections = sections.map((section) =>
-    sanitizeSectionChunks(section, rawScript),
+    sanitizeSectionChunks(section, chunkSourceRawScript),
   );
   const filteredChunkCount = sanitizedSections.reduce(
     (totalFilteredChunkCount, result) =>
@@ -370,6 +438,7 @@ function migrateScriptProject(value: unknown): MigratedProjectResult | null {
       id: value.id,
       title: value.title,
       rawScript,
+      chunkSourceRawScript,
       createdAt: value.createdAt,
       updatedAt: value.updatedAt,
       sections: clearLegacyRawScriptDescriptions(
@@ -432,6 +501,7 @@ function upsertProject(
 
 function readProjectCollection(storage: Storage): {
   filteredChunkCount: number;
+  libraryLoadError: LibraryLoadError | null;
   projects: ScriptProject[];
   skippedProjectCount: number;
   shouldPersist: boolean;
@@ -441,6 +511,7 @@ function readProjectCollection(storage: Storage): {
   if (rawProjects === null) {
     return {
       filteredChunkCount: 0,
+      libraryLoadError: null,
       projects: [],
       skippedProjectCount: 0,
       shouldPersist: false,
@@ -454,6 +525,7 @@ function readProjectCollection(storage: Storage): {
     if (!migratedProjects) {
       return {
         filteredChunkCount: 0,
+        libraryLoadError: createMalformedLibraryLoadError(),
         projects: [],
         skippedProjectCount: 0,
         shouldPersist: false,
@@ -462,6 +534,7 @@ function readProjectCollection(storage: Storage): {
 
     return {
       filteredChunkCount: migratedProjects.filteredChunkCount,
+      libraryLoadError: null,
       projects: migratedProjects.projects,
       skippedProjectCount: migratedProjects.skippedProjectCount,
       shouldPersist:
@@ -471,6 +544,7 @@ function readProjectCollection(storage: Storage): {
   } catch {
     return {
       filteredChunkCount: 0,
+      libraryLoadError: createMalformedLibraryLoadError(),
       projects: [],
       skippedProjectCount: 0,
       shouldPersist: false,
@@ -624,6 +698,7 @@ export function loadProjects(): ScriptProject[] {
 
   if (!storage) {
     setLastProjectCleanupSummary(null);
+    setLastLibraryLoadError(null);
     return [];
   }
 
@@ -649,6 +724,7 @@ export function loadProjects(): ScriptProject[] {
       persistProjects(storage, projects);
     }
 
+    setLastLibraryLoadError(collection.libraryLoadError);
     setLastProjectCleanupSummary(
       createProjectCleanupSummary(
         'load',
@@ -659,6 +735,7 @@ export function loadProjects(): ScriptProject[] {
     return projects;
   } catch {
     setLastProjectCleanupSummary(null);
+    setLastLibraryLoadError(null);
     return [];
   }
 }

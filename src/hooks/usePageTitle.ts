@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 
 export function usePageTitle(title: string) {
   useEffect(() => {
-    document.title = `${title} | BitFeeder`;
+    document.title = `${title} | TakeReady`;
   }, [title]);
 }
-

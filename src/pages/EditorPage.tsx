@@ -81,7 +81,16 @@ function buildSectionsFromOwnership(
   templates: SectionTemplate[],
 ): ScriptSection[] {
   if (chunks.length === 0) {
-    return [];
+    if (templates.length === 0) {
+      return [];
+    }
+
+    return templates.map((template) => ({
+      chunks: [],
+      description: template.description,
+      id: template.id,
+      title: template.title,
+    }));
   }
 
   const fallbackTemplate =
@@ -128,7 +137,6 @@ function buildSectionsFromOwnership(
   return sectionOrder
     .map((sectionId) => sectionMap.get(sectionId))
     .filter((section): section is ScriptSection => Boolean(section))
-    .filter((section) => section.chunks.length > 0)
     .map((section) => ({
       ...section,
       chunks: sortChunksByRange(section.chunks),
@@ -149,6 +157,14 @@ function createEditorSnapshot(
 
 function formatChunkCount(chunkCount: number): string {
   return `${chunkCount} performance chunk${chunkCount === 1 ? '' : 's'}`;
+}
+
+function getRechunkConfirmationMessage(hasMultipleSections: boolean): string {
+  if (hasMultipleSections) {
+    return 'Chunk edits already exist. Click Confirm Re-chunk to replace them from the raw script. This will also collapse the project into a single Main section.';
+  }
+
+  return 'Chunk edits already exist. Click Confirm Re-chunk to replace them from the raw script.';
 }
 
 export function EditorPage() {
@@ -182,6 +198,7 @@ export function EditorPage() {
   const hasChunkedData = generatedChunks.length > 0;
   const isChunkDataOutOfSync =
     hasChunkedData && rawScript !== chunkSourceRawScript;
+  const hasMultipleSectionTemplates = sectionTemplates.length > 1;
   const isGenericEditorRoute = !isNewProjectRoute && !routeProjectId;
   const editorTitle = title.trim() || 'Untitled script';
   const editorContextLabel = projectId ? 'Editing saved script' : 'New script';
@@ -212,7 +229,7 @@ export function EditorPage() {
     setRawScript(project.rawScript);
     setGeneratedChunks(savedChunks);
     setSectionTemplates(createSectionTemplates(project.sections));
-    setChunkSourceRawScript(project.rawScript);
+    setChunkSourceRawScript(project.chunkSourceRawScript);
     setIsBoundaryEditorOpen(false);
     setProjectId(project.id);
     setCreatedAt(project.createdAt);
@@ -299,7 +316,7 @@ export function EditorPage() {
     if (hasChunkedData && !isConfirmingRechunk) {
       setIsConfirmingRechunk(true);
       setStatusMessage(
-        'Chunk edits already exist. Click Confirm Re-chunk to replace them from the raw script.',
+        getRechunkConfirmationMessage(hasMultipleSectionTemplates),
       );
       return;
     }
@@ -320,6 +337,9 @@ export function EditorPage() {
       id: nextProjectId,
       title,
       rawScript,
+      chunkSourceRawScript: generatedChunks.length > 0
+        ? chunkSourceRawScript
+        : rawScript,
       createdAt: nextCreatedAt,
       updatedAt: now,
       sections: nextSections,
@@ -409,7 +429,7 @@ export function EditorPage() {
   if (missingProjectId) {
     return (
       <PageShell
-        description="That saved script could not be found in your local BitFeeder library."
+        description="That saved script could not be found in your local TakeReady library."
         title="Editor"
       >
         <section className="panel missing-project">

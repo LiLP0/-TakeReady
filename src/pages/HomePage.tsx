@@ -8,7 +8,7 @@ import { useScriptStorage } from '../hooks/useScriptStorage';
 export function HomePage() {
   usePageTitle('Home');
   const navigate = useNavigate();
-  const { projects } = useScriptStorage();
+  const { libraryLoadError, projects } = useScriptStorage();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   function handleCreateNewScript(): void {
@@ -17,34 +17,34 @@ export function HomePage() {
   }
 
   function handleOpenScriptsLibrary(): void {
-    if (projects.length > 0) {
+    if (projects.length > 0 || libraryLoadError) {
       setStatusMessage(null);
       navigate('/scripts');
       return;
     }
 
     setStatusMessage(
-      'No saved BitFeeder scripts yet. Create one in the Editor, then manage it from Scripts.',
+      'No saved TakeReady scripts yet. Create one in the Editor, then manage it from Scripts.',
     );
   }
 
   function handleImportProjectJson(): void {
-    setStatusMessage(
-      'Import is available from Scripts when you are ready to bring in a saved BitFeeder project.',
-    );
+    setStatusMessage(null);
+    navigate('/scripts');
   }
 
   return (
     <PageShell
-      description="BitFeeder helps YouTube creators turn rough scripts into performance-friendly chunks for easier recording."
-      title="BitFeeder"
+      description="TakeReady helps YouTube creators turn rough scripts into performance-friendly chunks for easier recording."
+      title="TakeReady"
     >
       <div className="panel-grid">
         <section className="panel panel-half">
           <h2>Start a project</h2>
           <p className="page-note">
             Start a new script here, then use Scripts to reopen the exact
-            project you want to edit or record later.
+            project you want to edit or record later. Import and export also
+            live in Scripts.
           </p>
           <div className="link-row">
             <button

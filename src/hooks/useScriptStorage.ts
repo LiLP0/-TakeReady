@@ -2,9 +2,14 @@ import { useState } from 'react';
 
 import type { ScriptFocusModeSettings, ScriptProject } from '../types/script';
 import {
+  compareDateStringsDescending,
+  clearLastLibraryLoadError,
+  clearLastProjectCleanupSummary,
   clearProjects,
+  consumeLastProjectCleanupSummary,
   deleteProject as deleteStoredProject,
-  getLastProjectCleanupSummary,
+  getLastLibraryLoadError,
+  type LibraryLoadError,
   loadProject as loadStoredProject,
   loadProjects as loadStoredProjects,
   loadScriptFocusModeSettings as loadStoredScriptFocusModeSettings,
@@ -14,10 +19,12 @@ import {
 } from '../utils/storage';
 
 export type UseScriptStorageResult = {
+  libraryLoadError: LibraryLoadError | null;
   projects: ScriptProject[];
   project: ScriptProject | null;
-  projectCleanupSummary: ProjectCleanupSummary | null;
   scriptFocusModeSettings: ScriptFocusModeSettings;
+  clearProjectCleanupSummary: () => void;
+  consumeProjectCleanupSummary: () => ProjectCleanupSummary | null;
   loadProjects: () => ScriptProject[];
   loadProject: (projectId: string) => ScriptProject | null;
   loadScriptFocusModeSettings: () => ScriptFocusModeSettings;
@@ -34,7 +41,10 @@ function getLatestProject(projects: ScriptProject[]): ScriptProject | null {
   }
 
   return [...projects].sort((firstProject, secondProject) =>
-    secondProject.updatedAt.localeCompare(firstProject.updatedAt),
+    compareDateStringsDescending(
+      firstProject.updatedAt,
+      secondProject.updatedAt,
+    ),
   )[0];
 }
 
@@ -42,8 +52,8 @@ export function useScriptStorage(): UseScriptStorageResult {
   const [projects, setProjects] = useState<ScriptProject[]>(() =>
     loadStoredProjects(),
   );
-  const [projectCleanupSummary, setProjectCleanupSummary] =
-    useState<ProjectCleanupSummary | null>(() => getLastProjectCleanupSummary());
+  const [libraryLoadError, setLibraryLoadError] =
+    useState<LibraryLoadError | null>(() => getLastLibraryLoadError());
   const [scriptFocusModeSettings, setScriptFocusModeSettings] =
     useState<ScriptFocusModeSettings>(() => loadStoredScriptFocusModeSettings());
   const project = getLatestProject(projects);
@@ -51,8 +61,16 @@ export function useScriptStorage(): UseScriptStorageResult {
   function refreshProjects(): ScriptProject[] {
     const storedProjects = loadStoredProjects();
     setProjects(storedProjects);
-    setProjectCleanupSummary(getLastProjectCleanupSummary());
+    setLibraryLoadError(getLastLibraryLoadError());
     return storedProjects;
+  }
+
+  function clearProjectCleanupSummary(): void {
+    clearLastProjectCleanupSummary();
+  }
+
+  function consumeProjectCleanupSummary(): ProjectCleanupSummary | null {
+    return consumeLastProjectCleanupSummary();
   }
 
   function loadProjects(): ScriptProject[] {
@@ -95,14 +113,18 @@ export function useScriptStorage(): UseScriptStorageResult {
   function clear(): void {
     clearProjects();
     setProjects([]);
-    setProjectCleanupSummary(null);
+    clearLastLibraryLoadError();
+    setLibraryLoadError(null);
+    clearProjectCleanupSummary();
   }
 
   return {
+    libraryLoadError,
     projects,
     project,
-    projectCleanupSummary,
     scriptFocusModeSettings,
+    clearProjectCleanupSummary,
+    consumeProjectCleanupSummary,
     loadProjects,
     loadProject,
     loadScriptFocusModeSettings,
