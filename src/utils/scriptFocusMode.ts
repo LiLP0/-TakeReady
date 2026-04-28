@@ -42,7 +42,6 @@ export type ScriptFocusEmphasisInlineStyle = {
 
 export const DEFAULT_SCRIPT_FOCUS_MODE_SETTINGS: ScriptFocusModeSettings = {
   enabled: false,
-  wordAnchorsEnabled: false,
   emphasizedPortion: 35,
   minimumWordLength: 1,
   frequency: 1,
@@ -188,16 +187,17 @@ export function normalizeScriptFocusModeSettings(
   value: Partial<ScriptFocusModeSettings> | unknown,
 ): ScriptFocusModeSettings {
   const settings = isRecord(value) ? value : {};
+  const legacyWordAnchorsEnabled = normalizeBoolean(
+    settings.wordAnchorsEnabled,
+    false,
+  );
 
   return {
-    enabled: normalizeBoolean(
-      settings.enabled,
-      DEFAULT_SCRIPT_FOCUS_MODE_SETTINGS.enabled,
-    ),
-    wordAnchorsEnabled: normalizeBoolean(
-      settings.wordAnchorsEnabled,
-      DEFAULT_SCRIPT_FOCUS_MODE_SETTINGS.wordAnchorsEnabled,
-    ),
+    enabled:
+      normalizeBoolean(
+        settings.enabled,
+        DEFAULT_SCRIPT_FOCUS_MODE_SETTINGS.enabled,
+      ) || legacyWordAnchorsEnabled,
     emphasizedPortion: normalizeNumber(
       settings.emphasizedPortion,
       DEFAULT_SCRIPT_FOCUS_MODE_SETTINGS.emphasizedPortion,
@@ -239,7 +239,7 @@ export function normalizeScriptFocusModeSettings(
 export function isScriptFocusModeActive(
   settings: ScriptFocusModeSettings,
 ): boolean {
-  return settings.enabled && settings.wordAnchorsEnabled;
+  return settings.enabled;
 }
 
 export function getScriptFocusRenderableSegments(

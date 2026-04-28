@@ -1,6 +1,5 @@
 import {
   type FormEvent,
-  type MouseEvent,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -180,9 +179,20 @@ export function PerformancePage() {
   const previousPlaybackChunk = playbackChunks[currentIndex - 1] ?? null;
   const nextPlaybackChunk = playbackChunks[currentIndex + 1] ?? null;
   const isLastChunk = totalChunks > 0 && currentIndex === totalChunks - 1;
-  const isScriptFocusEnabled =
-    scriptFocusModeSettings.enabled &&
-    scriptFocusModeSettings.wordAnchorsEnabled;
+  const isScriptFocusEnabled = scriptFocusModeSettings.enabled;
+  const scriptFocusLayoutKey = isScriptFocusEnabled
+    ? JSON.stringify({
+        applyToNumbers: scriptFocusModeSettings.applyToNumbers,
+        emphasisStyle: scriptFocusModeSettings.emphasisStyle,
+        emphasizedPortion: scriptFocusModeSettings.emphasizedPortion,
+        frequency: scriptFocusModeSettings.frequency,
+        ignoreShortFunctionWords:
+          scriptFocusModeSettings.ignoreShortFunctionWords,
+        minimumWordLength: scriptFocusModeSettings.minimumWordLength,
+        underlineStyle: scriptFocusModeSettings.underlineStyle,
+        underlineThickness: scriptFocusModeSettings.underlineThickness,
+      })
+    : 'script-focus-disabled';
   const progressPercent =
     totalChunks > 0 ? ((currentIndex + 1) / totalChunks) * 100 : 0;
   const scriptFocusEmphasisStyle =
@@ -319,6 +329,7 @@ export function PerformancePage() {
     currentPlaybackChunk?.chunk.id,
     currentPlaybackChunk?.chunk.text,
     isFullscreenActive,
+    scriptFocusLayoutKey,
   ]);
 
   function handlePrevious(): void {
@@ -398,7 +409,6 @@ export function PerformancePage() {
   function handleScriptFocusEnabledChange(nextChecked: boolean): void {
     updateScriptFocusSettings({
       enabled: nextChecked,
-      wordAnchorsEnabled: nextChecked,
     });
   }
 
@@ -457,18 +467,6 @@ export function PerformancePage() {
     );
   }
 
-  function handleReadingAreaClick(event: MouseEvent<HTMLElement>): void {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const clickX = event.clientX - bounds.left;
-
-    if (clickX < bounds.width / 2) {
-      handlePrevious();
-      return;
-    }
-
-    handleNext();
-  }
-
   function handleBackToHome(): void {
     navigate('/');
   }
@@ -489,7 +487,7 @@ export function PerformancePage() {
     if (routeProjectId) {
       return (
         <PageShell
-          description="That saved script could not be found in your local BitFeeder library."
+          description="That saved script could not be found in your local TakeReady library."
           title="Performance"
         >
           <section className="panel missing-project">
@@ -522,7 +520,7 @@ export function PerformancePage() {
 
     return (
       <PageShell
-        description="Load a saved BitFeeder project here when you are ready to record chunk by chunk."
+        description="Load a saved TakeReady project here when you are ready to record chunk by chunk."
         title="Performance"
       >
         <section className="panel performance-empty">
@@ -1040,36 +1038,56 @@ export function PerformancePage() {
             </aside>
           ) : null}
 
-          <article
-            className={`performance-chunk ${
-              currentPlaybackChunk.chunk.emojiCue ? 'has-emoji-cue' : ''
-            }`}
-            aria-live="polite"
-            onClick={handleReadingAreaClick}
-            ref={chunkContainerRef}
-            title="Tap left for previous, right for next."
-          >
-            {currentPlaybackChunk.chunk.emojiCue ? (
-              <span
-                className="performance-emoji-cue"
-                aria-label="Delivery emoji cue"
-              >
-                {currentPlaybackChunk.chunk.emojiCue}
-              </span>
-            ) : null}
-            <p
-              className={`performance-chunk-text ${
-                isMirrorMode ? 'is-mirrored' : ''
-              } script-focus-render`}
-              ref={chunkTextRef}
-              style={{ fontSize: `${chunkFontSize}px` }}
+          <div className="performance-chunk-shell">
+            <button
+              aria-label="Go to previous chunk"
+              className="performance-nav-zone is-previous"
+              disabled={currentIndex === 0}
+              onClick={handlePrevious}
+              type="button"
             >
-              {renderScriptFocusText(
-                currentPlaybackChunk.chunk.text,
-                currentPlaybackChunk.chunk.id,
-              )}
-            </p>
-          </article>
+              <span aria-hidden="true">◀</span>
+            </button>
+
+            <article
+              className={`performance-chunk ${
+                currentPlaybackChunk.chunk.emojiCue ? 'has-emoji-cue' : ''
+              }`}
+              aria-live="polite"
+              ref={chunkContainerRef}
+            >
+              {currentPlaybackChunk.chunk.emojiCue ? (
+                <span
+                  className="performance-emoji-cue"
+                  aria-label="Delivery emoji cue"
+                >
+                  {currentPlaybackChunk.chunk.emojiCue}
+                </span>
+              ) : null}
+              <p
+                className={`performance-chunk-text ${
+                  isMirrorMode ? 'is-mirrored' : ''
+                } script-focus-render`}
+                ref={chunkTextRef}
+                style={{ fontSize: `${chunkFontSize}px` }}
+              >
+                {renderScriptFocusText(
+                  currentPlaybackChunk.chunk.text,
+                  currentPlaybackChunk.chunk.id,
+                )}
+              </p>
+            </article>
+
+            <button
+              aria-label="Go to next chunk"
+              className="performance-nav-zone is-next"
+              disabled={currentIndex === totalChunks - 1}
+              onClick={handleNext}
+              type="button"
+            >
+              <span aria-hidden="true">▶</span>
+            </button>
+          </div>
 
           {nextPlaybackChunk ? (
             <aside

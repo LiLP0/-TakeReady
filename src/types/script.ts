@@ -69,6 +69,7 @@ export interface ScriptProject {
   id: EntityId;
   title: string;
   rawScript: string;
+  chunkSourceRawScript: string;
   createdAt: ISODateString;
   updatedAt: ISODateString;
   sections: ScriptSection[];
@@ -77,7 +78,6 @@ export interface ScriptProject {
 
 export interface ScriptFocusModeSettings {
   enabled: boolean;
-  wordAnchorsEnabled: boolean;
   emphasizedPortion: number;
   minimumWordLength: number;
   frequency: number;
