@@ -1,10 +1,10 @@
-# TakeReady
+# LexiCue Studio
 
 ## Project Name
-TakeReady
+LexiCue
 
 ## What the app does
-TakeReady is a responsive web app for YouTube creators that turns rough scripts into performance-friendly chunks for easier recording. It is built for comedy timing, commentary videos, explainer content, and semi-improvised delivery rather than generic business teleprompting.
+LexiCue helps creators break long scripts into focused recording cards with delivery notes, pause cues, B-roll ideas, progress tracking, and dyslexia-friendly reading controls.
 
 ## Core Idea
 Help creators shape messy draft writing into readable beats that are easier to perform on camera without losing rhythm, personality, or natural delivery.

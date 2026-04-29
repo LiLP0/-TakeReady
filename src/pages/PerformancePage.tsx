@@ -489,7 +489,7 @@ export function PerformancePage() {
     if (routeProjectId) {
       return (
         <PageShell
-          description="That saved script could not be found in your local TakeReady library."
+          description="That saved script could not be found in your local LexiCue library."
           title="Performance"
         >
           <section className="panel missing-project">
@@ -522,7 +522,7 @@ export function PerformancePage() {
 
     return (
       <PageShell
-        description="Load a saved TakeReady project here when you are ready to record chunk by chunk."
+        description="Load a saved LexiCue project here when you are ready to record chunk by chunk."
         title="Performance"
       >
         <section className="panel performance-empty">

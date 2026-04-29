@@ -24,7 +24,7 @@ export function HomePage() {
     }
 
     setStatusMessage(
-      'No saved TakeReady scripts yet. Create one in the Editor, then manage it from Scripts.',
+      'No saved LexiCue scripts yet. Create one in the Editor, then manage it from Scripts.',
     );
   }
 
@@ -35,8 +35,8 @@ export function HomePage() {
 
   return (
     <PageShell
-      description="TakeReady helps YouTube creators turn rough scripts into performance-friendly chunks for easier recording."
-      title="TakeReady"
+      description="LexiCue helps creators break long scripts into focused recording cards with delivery notes, pause cues, B-roll ideas, progress tracking, and dyslexia-friendly reading controls."
+      title="LexiCue Studio"
     >
       <div className="panel-grid">
         <section className="panel panel-half">

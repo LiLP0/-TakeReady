@@ -8,9 +8,9 @@ export function AppLayout() {
       <header className="app-header">
         <div className="container app-header-inner">
           <div className="brand">
-            <p className="brand-title">TakeReady</p>
+            <p className="brand-title">LexiCue</p>
             <p className="brand-subtitle">
-              Creator-first script chunking, performance reading, and a reusable project library.
+              Turn long scripts into recording-ready cards.
             </p>
           </div>
 

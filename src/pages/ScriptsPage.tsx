@@ -184,7 +184,7 @@ function formatCleanupDetails(summary: ProjectCleanupSummary): string {
 }
 
 function formatLoadCleanupMessage(summary: ProjectCleanupSummary): string {
-  return `TakeReady cleaned up your saved library while loading it. ${formatCleanupDetails(summary)}.`;
+  return `LexiCue cleaned up your saved library while loading it. ${formatCleanupDetails(summary)}.`;
 }
 
 function formatImportSuccessMessage(
@@ -200,21 +200,21 @@ function formatImportSuccessMessage(
     return importedProjectsLabel;
   }
 
-  return `${importedProjectsLabel} TakeReady cleaned the import so the usable data stayed intact: ${formatCleanupDetails(cleanupSummary)}.`;
+  return `${importedProjectsLabel} LexiCue cleaned the import so the usable data stayed intact: ${formatCleanupDetails(cleanupSummary)}.`;
 }
 
 function formatLibraryLoadErrorMessage(
   libraryLoadError: LibraryLoadError,
 ): string {
   if (libraryLoadError.code === 'malformed_library') {
-    return 'TakeReady found saved library data but could not read it. Write actions are temporarily blocked to avoid overwriting recoverable data. Export any readable scripts first, then recover or intentionally replace the saved library before importing a backup.';
+    return 'LexiCue found saved library data but could not read it. Write actions are temporarily blocked to avoid overwriting recoverable data. Export any readable scripts first, then recover or intentionally replace the saved library before importing a backup.';
   }
 
-  return 'TakeReady could not read your saved library.';
+  return 'LexiCue could not read your saved library.';
 }
 
 function getWriteBlockedStatusMessage(): string {
-  return 'Write actions are temporarily blocked while TakeReady protects unreadable saved library data. Export any readable scripts first, then recover or intentionally replace the saved library before importing a backup.';
+  return 'Write actions are temporarily blocked while LexiCue protects unreadable saved library data. Export any readable scripts first, then recover or intentionally replace the saved library before importing a backup.';
 }
 
 export function ScriptsPage() {
@@ -458,11 +458,11 @@ export function ScriptsPage() {
     }
 
     try {
-      downloadJsonFile('bitfeeder-script-library.json', projects);
+      downloadJsonFile('lexicue-script-library.json', projects);
       setPendingDeleteProjectId(null);
       setRenamingProjectId(null);
       setLibraryStatus({
-        message: `Exported all ${projects.length} saved script${projects.length === 1 ? '' : 's'} as bitfeeder-script-library.json.`,
+        message: `Exported all ${projects.length} saved script${projects.length === 1 ? '' : 's'} as lexicue-script-library.json.`,
         type: 'success',
       });
     } catch {
@@ -534,7 +534,7 @@ export function ScriptsPage() {
     } catch {
       setLibraryStatus({
         message:
-          `Import failed for ${file.name}. Choose a TakeReady script export or full library JSON file.`,
+          `Import failed for ${file.name}. Choose a LexiCue script export or full library JSON file.`,
         type: 'error',
       });
     } finally {
@@ -565,7 +565,7 @@ export function ScriptsPage() {
 
   return (
     <PageShell
-      description="Review your saved TakeReady scripts and open the one you want to edit or record."
+      description="Review your saved LexiCue scripts and open the one you want to edit or record."
       title="Scripts"
     >
       <section className="panel scripts-toolbar" aria-label="Script library tools">
@@ -672,8 +672,8 @@ export function ScriptsPage() {
         <section className="panel scripts-empty">
           <h2>Saved library needs recovery</h2>
           <p className="page-note">
-            TakeReady found saved library data but could not read it. Import a
-            saved TakeReady JSON backup from above, or create and save a new
+            LexiCue found saved library data but could not read it. Import a
+            saved LexiCue JSON backup from above, or create and save a new
             script to rebuild the local library.
           </p>
           <div className="action-row">

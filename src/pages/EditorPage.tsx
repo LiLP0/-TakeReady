@@ -448,7 +448,7 @@ export function EditorPage() {
   if (missingProjectId) {
     return (
       <PageShell
-        description="That saved script could not be found in your local TakeReady library."
+        description="That saved script could not be found in your local LexiCue library."
         title="Editor"
       >
         <section className="panel missing-project">
