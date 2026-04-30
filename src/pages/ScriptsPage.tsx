@@ -114,7 +114,9 @@ function duplicateProject(
 
   return {
     ...project,
+    cloudSyncState: 'local_only',
     id: createProjectId(),
+    googleDriveFileId: undefined,
     title: createCopyTitle(project, projects),
     createdAt: now,
     updatedAt: now,
@@ -184,7 +186,7 @@ function formatCleanupDetails(summary: ProjectCleanupSummary): string {
 }
 
 function formatLoadCleanupMessage(summary: ProjectCleanupSummary): string {
-  return `LexiCue cleaned up your saved library while loading it. ${formatCleanupDetails(summary)}.`;
+  return `Library cleanup on load: ${formatCleanupDetails(summary)}.`;
 }
 
 function formatImportSuccessMessage(
@@ -200,7 +202,7 @@ function formatImportSuccessMessage(
     return importedProjectsLabel;
   }
 
-  return `${importedProjectsLabel} LexiCue cleaned the import so the usable data stayed intact: ${formatCleanupDetails(cleanupSummary)}.`;
+  return `${importedProjectsLabel} Cleanup: ${formatCleanupDetails(cleanupSummary)}.`;
 }
 
 function formatLibraryLoadErrorMessage(
@@ -217,6 +219,22 @@ function getWriteBlockedStatusMessage(): string {
   return 'Write actions are temporarily blocked while LexiCue protects unreadable saved library data. Export any readable scripts first, then recover or intentionally replace the saved library before importing a backup.';
 }
 
+function getProjectCloudSyncLabel(project: ScriptProject): string {
+  if (project.cloudSyncState === 'synced') {
+    return 'Synced';
+  }
+
+  if (project.cloudSyncState === 'syncing') {
+    return 'Syncing';
+  }
+
+  if (project.cloudSyncState === 'sync_error') {
+    return 'Sync error';
+  }
+
+  return 'Local only';
+}
+
 export function ScriptsPage() {
   usePageTitle('Scripts');
   const navigate = useNavigate();
@@ -224,12 +242,14 @@ export function ScriptsPage() {
     clearProjectCleanupSummary,
     consumeProjectCleanupSummary,
     deleteProject,
+    isGoogleCloudSyncEnabled,
     isLibraryWriteBlocked,
     libraryLoadError,
     loadProjects,
     projectCleanupSummary,
     projects,
     save,
+    syncProjectToGoogleDrive,
   } = useScriptStorage();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('updated');
@@ -250,6 +270,25 @@ export function ScriptsPage() {
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const sortedProjects = sortProjects(projects, sortMode);
   const filteredProjects = filterProjectsByTitle(sortedProjects, searchTerm);
+  const statusEntries: LibraryStatus[] = [
+    ...(libraryLoadError
+      ? [
+          {
+            message: formatLibraryLoadErrorMessage(libraryLoadError),
+            type: 'error' as const,
+          },
+        ]
+      : []),
+    ...(libraryStatus ? [libraryStatus] : []),
+    ...(cleanupMessage
+      ? [
+          {
+            message: cleanupMessage,
+            type: 'success' as const,
+          },
+        ]
+      : []),
+  ];
 
   function clearCleanupNotice(): void {
     clearProjectCleanupSummary();
@@ -271,6 +310,18 @@ export function ScriptsPage() {
 
     clearProjectCleanupSummary();
   }, [projectCleanupSummary]);
+
+  function setStatusFromActionResult(
+    result: {
+      message: string;
+      status: 'blocked' | 'error' | 'success';
+    },
+  ): void {
+    setLibraryStatus({
+      message: result.message,
+      type: result.status === 'success' ? 'success' : 'error',
+    });
+  }
 
   function handleOpenEditor(projectId: string): void {
     clearCleanupNotice();
@@ -403,6 +454,7 @@ export function ScriptsPage() {
 
     const didSave = save({
       ...project,
+      cloudSyncState: isGoogleCloudSyncEnabled ? 'syncing' : 'local_only',
       title: nextTitle,
       updatedAt: now,
     });
@@ -422,7 +474,20 @@ export function ScriptsPage() {
     setRenamingProjectId(null);
     setRenameTitle('');
     setPendingDeleteProjectId(null);
-    setLibraryStatus(null);
+    setLibraryStatus(
+      isGoogleCloudSyncEnabled
+        ? {
+            message: `Saved "${nextTitle}" locally. Cloud sync is running in the background.`,
+            type: 'success',
+          }
+        : null,
+    );
+
+    if (isGoogleCloudSyncEnabled) {
+      void syncProjectToGoogleDrive(project.id).then((result) =>
+        setStatusFromActionResult(result),
+      );
+    }
   }
 
   function handleExportProject(project: ScriptProject): void {
@@ -644,27 +709,19 @@ export function ScriptsPage() {
           </div>
         ) : null}
 
-        {libraryStatus ? (
-          <p
-            aria-live="polite"
-            className={`status-message ${
-              libraryStatus.type === 'error' ? 'is-error' : 'is-success'
-            }`}
-          >
-            {libraryStatus.message}
-          </p>
-        ) : null}
-
-        {cleanupMessage ? (
-          <p aria-live="polite" className="status-message is-success">
-            {cleanupMessage}
-          </p>
-        ) : null}
-
-        {libraryLoadError ? (
-          <p aria-live="polite" className="status-message is-error">
-            {formatLibraryLoadErrorMessage(libraryLoadError)}
-          </p>
+        {statusEntries.length > 0 ? (
+          <div className="scripts-status-stack" aria-live="polite">
+            {statusEntries.map((statusEntry, index) => (
+              <p
+                className={`status-message ${
+                  statusEntry.type === 'error' ? 'is-error' : 'is-success'
+                }`}
+                key={`${statusEntry.type}-${index}`}
+              >
+                {statusEntry.message}
+              </p>
+            ))}
+          </div>
         ) : null}
       </section>
 
@@ -677,6 +734,13 @@ export function ScriptsPage() {
             script to rebuild the local library.
           </p>
           <div className="action-row">
+            <button
+              className="text-link is-primary"
+              onClick={handleCreateNewScript}
+              type="button"
+            >
+              Create New Script
+            </button>
             <button
               className="text-link"
               onClick={handleBackHome}
@@ -693,6 +757,13 @@ export function ScriptsPage() {
             Create and save a script from the Editor, then it will appear here.
           </p>
           <div className="action-row">
+            <button
+              className="text-link is-primary"
+              onClick={handleCreateNewScript}
+              type="button"
+            >
+              Create New Script
+            </button>
             <button
               className="text-link"
               onClick={handleBackHome}
@@ -753,6 +824,11 @@ export function ScriptsPage() {
                         <p className="script-card-meta">
                           {chunkCount} chunk{chunkCount === 1 ? '' : 's'}
                         </p>
+                        <span
+                          className={`script-status-badge sync-status-badge is-${project.cloudSyncState.replace('_', '-')}`}
+                        >
+                          {getProjectCloudSyncLabel(project)}
+                        </span>
                       </div>
                     </div>
 

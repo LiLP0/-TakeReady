@@ -355,6 +355,13 @@ select {
   padding-bottom: 0.25rem;
 }
 
+.editor-cloud-sync-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .script-context-label {
   margin: 0;
   color: #94a3b8;
@@ -413,6 +420,24 @@ select {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+.route-context-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 1rem;
+  background: rgba(9, 12, 17, 0.56);
+}
+
+.route-context-note {
+  margin: 0;
+  color: #cbd5e1;
+  line-height: 1.5;
 }
 
 .editor-action-note {
@@ -609,6 +634,185 @@ select {
   gap: 1rem;
 }
 
+.sign-in-panel,
+.account-empty {
+  display: grid;
+  gap: 1rem;
+  max-width: 42rem;
+}
+
+.sign-in-copy {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.sign-in-copy h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.scripts-status-stack {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.scripts-cloud-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 1rem;
+  background: rgba(9, 12, 17, 0.42);
+}
+
+.scripts-account-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 1rem;
+  background: rgba(9, 12, 17, 0.42);
+}
+
+.scripts-account-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.scripts-account-copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.scripts-account-copy h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.scripts-account-badge {
+  min-height: 2.2rem;
+}
+
+.scripts-account-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.scripts-account-body.is-signed-out {
+  display: grid;
+  justify-items: start;
+}
+
+.scripts-account-avatar {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.scripts-account-avatar.is-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.82);
+  color: #f8fafc;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.scripts-account-details {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.scripts-account-name {
+  margin: 0;
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.scripts-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
+.scripts-google-sign-in-button {
+  min-height: 2.75rem;
+}
+
+.scripts-cloud-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.scripts-cloud-copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.scripts-cloud-copy h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.scripts-cloud-connection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.scripts-cloud-badge {
+  min-height: 2.2rem;
+}
+
+.scripts-cloud-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.scripts-cloud-stat {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.scripts-cloud-stat-label {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.scripts-cloud-stat-value {
+  color: #f8fafc;
+  font-size: 1rem;
+}
+
+.scripts-cloud-action-row {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.scripts-cloud-note {
+  margin: 0;
+}
+
 .scripts-library-actions {
   display: flex;
   flex-wrap: wrap;
@@ -675,6 +879,36 @@ select {
   border-color: rgba(251, 191, 36, 0.24);
   background: rgba(120, 53, 15, 0.22);
   color: #fde68a;
+}
+
+.script-status-badge.is-pending {
+  border-color: rgba(96, 165, 250, 0.28);
+  background: rgba(30, 64, 175, 0.22);
+  color: #bfdbfe;
+}
+
+.sync-status-badge.is-local-only {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.42);
+  color: #cbd5e1;
+}
+
+.sync-status-badge.is-syncing {
+  border-color: rgba(96, 165, 250, 0.28);
+  background: rgba(30, 64, 175, 0.22);
+  color: #bfdbfe;
+}
+
+.sync-status-badge.is-synced {
+  border-color: rgba(134, 239, 172, 0.26);
+  background: rgba(22, 101, 52, 0.24);
+  color: #bbf7d0;
+}
+
+.sync-status-badge.is-sync-error {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(127, 29, 29, 0.24);
+  color: #fecaca;
 }
 
 .script-card-actions {
@@ -1262,6 +1496,10 @@ select {
 
   .scripts-toolbar-controls {
     grid-template-columns: minmax(0, 1fr) minmax(12rem, 16rem);
+  }
+
+  .scripts-cloud-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .chunk-boundary-layout {

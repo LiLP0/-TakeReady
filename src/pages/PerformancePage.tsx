@@ -163,6 +163,7 @@ export function PerformancePage() {
     : null;
   const project = routeProjectId ? routedProject : latestProject;
   const isGenericPerformanceRoute = !routeProjectId;
+  const hasMultipleSavedProjects = projects.length > 1;
   const [currentIndex, setCurrentIndex] = useState(0);
   const [chunkFontSize, setChunkFontSize] = useState(MAX_CHUNK_FONT_SIZE);
   const [isFullscreenSupported, setIsFullscreenSupported] = useState(false);
@@ -581,13 +582,28 @@ export function PerformancePage() {
   return (
     <PageShell
       description={
-        isGenericPerformanceRoute
+        isGenericPerformanceRoute && hasMultipleSavedProjects
           ? 'You are reading the most recently updated chunked script in your library. Open Scripts to choose a different project.'
           : 'Read your saved script one performance-friendly chunk at a time.'
       }
       title="Performance"
     >
       <section className="panel performance-reader" ref={performanceReaderRef}>
+        {isGenericPerformanceRoute && hasMultipleSavedProjects ? (
+          <div className="route-context-notice" aria-live="polite">
+            <p className="route-context-note">
+              You are viewing the most recently updated script in your library.
+            </p>
+            <button
+              className="text-link"
+              onClick={handleBackToScripts}
+              type="button"
+            >
+              Choose a Different Script
+            </button>
+          </div>
+        ) : null}
+
         <div className="performance-meta">
           <div className="performance-meta-copy">
             <p className="performance-label">Recording script</p>

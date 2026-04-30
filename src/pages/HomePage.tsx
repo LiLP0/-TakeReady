@@ -28,7 +28,7 @@ export function HomePage() {
     );
   }
 
-  function handleImportProjectJson(): void {
+  function handleGoToImportInScripts(): void {
     setStatusMessage(null);
     navigate('/scripts');
   }
@@ -63,10 +63,10 @@ export function HomePage() {
             </button>
             <button
               className="text-link"
-              onClick={handleImportProjectJson}
+              onClick={handleGoToImportInScripts}
               type="button"
             >
-              Import Project JSON
+              Go to Import in Scripts
             </button>
           </div>
           {statusMessage ? (

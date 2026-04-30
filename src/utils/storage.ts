@@ -1,5 +1,7 @@
+import type { GoogleSignedInUser } from '../types/auth';
 import type {
   ChunkType,
+  ProjectCloudSyncState,
   ScriptChunk,
   ScriptFocusModeSettings,
   ScriptProject,
@@ -15,6 +17,8 @@ import {
 const BITFEEDER_PROJECTS_STORAGE_KEY = 'bitfeeder.projects';
 const BITFEEDER_SCRIPT_FOCUS_SETTINGS_STORAGE_KEY =
   'bitfeeder.scriptFocusMode';
+const BITFEEDER_GOOGLE_SIGNED_IN_USER_STORAGE_KEY =
+  'bitfeeder.googleSignedInUser';
 const LEGACY_BITFEEDER_PROJECT_STORAGE_KEY = 'bitfeeder.project';
 const MAIN_SECTION_ID = 'main';
 const MAIN_SECTION_TITLE = 'Main';
@@ -42,6 +46,13 @@ const TONE_TAGS: ToneTag[] = [
   'confused',
   'fake_serious',
   'escalating',
+];
+
+const PROJECT_CLOUD_SYNC_STATES: ProjectCloudSyncState[] = [
+  'local_only',
+  'syncing',
+  'synced',
+  'sync_error',
 ];
 
 export type ProjectCleanupSummary = {
@@ -193,8 +204,53 @@ function isChunkType(value: unknown): value is ChunkType {
   return isString(value) && CHUNK_TYPES.includes(value as ChunkType);
 }
 
+function isProjectCloudSyncState(value: unknown): value is ProjectCloudSyncState {
+  return (
+    isString(value) &&
+    PROJECT_CLOUD_SYNC_STATES.includes(value as ProjectCloudSyncState)
+  );
+}
+
+function isGoogleSignedInUser(value: unknown): value is GoogleSignedInUser {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    isString(value.googleUserId) &&
+    isString(value.email) &&
+    isString(value.displayName) &&
+    isOptionalString(value.avatarUrl)
+  );
+}
+
 function isToneTag(value: unknown): value is ToneTag {
   return isString(value) && TONE_TAGS.includes(value as ToneTag);
+}
+
+function normalizeProjectCloudSyncState(
+  value: unknown,
+  googleDriveFileId?: string,
+): ProjectCloudSyncState {
+  if (isProjectCloudSyncState(value)) {
+    return value === 'syncing' ? 'sync_error' : value;
+  }
+
+  return googleDriveFileId ? 'synced' : 'local_only';
+}
+
+function unwrapCloudProjectValue(value: unknown): unknown {
+  if (
+    isRecord(value) &&
+    isRecord(value.lexiCue) &&
+    isString(value.lexiCue.app) &&
+    value.lexiCue.app === 'LexiCue' &&
+    'project' in value
+  ) {
+    return value.project;
+  }
+
+  return value;
 }
 
 function getScriptSections(value: unknown): RawScriptSectionRecord[] | null {
@@ -425,6 +481,13 @@ function migrateScriptProject(value: unknown): MigratedProjectResult | null {
   const chunkSourceRawScript = isString(value.chunkSourceRawScript)
     ? value.chunkSourceRawScript
     : rawScript;
+  const googleDriveFileId = isString(value.googleDriveFileId)
+    ? value.googleDriveFileId
+    : undefined;
+  const cloudSyncState = normalizeProjectCloudSyncState(
+    value.cloudSyncState,
+    googleDriveFileId,
+  );
   const sanitizedSections = sections.map((section) =>
     sanitizeSectionChunks(section, chunkSourceRawScript),
   );
@@ -441,6 +504,8 @@ function migrateScriptProject(value: unknown): MigratedProjectResult | null {
       title: value.title,
       rawScript,
       chunkSourceRawScript,
+      googleDriveFileId,
+      cloudSyncState,
       createdAt: value.createdAt,
       updatedAt: value.updatedAt,
       sections: clearLegacyRawScriptDescriptions(
@@ -612,8 +677,10 @@ export function saveProject(project: ScriptProject): LibraryWriteResult {
 }
 
 export function parseImportedProjects(value: unknown): ScriptProject[] | null {
-  if (Array.isArray(value)) {
-    const migratedProjects = migrateScriptProjects(value);
+  const importValue = unwrapCloudProjectValue(value);
+
+  if (Array.isArray(importValue)) {
+    const migratedProjects = migrateScriptProjects(importValue);
 
     if (!migratedProjects) {
       setLastProjectCleanupSummary(null);
@@ -630,7 +697,7 @@ export function parseImportedProjects(value: unknown): ScriptProject[] | null {
     return migratedProjects.projects;
   }
 
-  const migratedProject = migrateScriptProject(value);
+  const migratedProject = migrateScriptProject(importValue);
 
   if (!migratedProject) {
     setLastProjectCleanupSummary(null);
@@ -669,6 +736,68 @@ export function saveImportedProjects(
   } catch {
     // Ignore import write failures and keep the app stable.
     return 'failed';
+  }
+}
+
+export function loadGoogleSignedInUser(): GoogleSignedInUser | null {
+  const storage = getStorage();
+
+  if (!storage) {
+    return null;
+  }
+
+  try {
+    const rawGoogleSignedInUser = storage.getItem(
+      BITFEEDER_GOOGLE_SIGNED_IN_USER_STORAGE_KEY,
+    );
+
+    if (!rawGoogleSignedInUser) {
+      return null;
+    }
+
+    const parsedGoogleSignedInUser: unknown = JSON.parse(rawGoogleSignedInUser);
+
+    return isGoogleSignedInUser(parsedGoogleSignedInUser)
+      ? parsedGoogleSignedInUser
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveGoogleSignedInUser(user: GoogleSignedInUser): void {
+  const storage = getStorage();
+
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.setItem(
+      BITFEEDER_GOOGLE_SIGNED_IN_USER_STORAGE_KEY,
+      JSON.stringify({
+        avatarUrl: user.avatarUrl,
+        displayName: user.displayName,
+        email: user.email,
+        googleUserId: user.googleUserId,
+      }),
+    );
+  } catch {
+    // Ignore profile write failures and keep the app usable.
+  }
+}
+
+export function clearGoogleSignedInUser(): void {
+  const storage = getStorage();
+
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.removeItem(BITFEEDER_GOOGLE_SIGNED_IN_USER_STORAGE_KEY);
+  } catch {
+    // Ignore profile clear failures and keep the app usable.
   }
 }
 

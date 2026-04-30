@@ -1,8 +1,15 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
-import { appRoutes } from '../utils/routes';
+import { useScriptStorage } from '../hooks/useScriptStorage';
+import { ACCOUNT_ROUTE, appRoutes, SIGN_IN_ROUTE } from '../utils/routes';
 
 export function AppLayout() {
+  const location = useLocation();
+  const { googleAppAuthState } = useScriptStorage();
+  const authRoute =
+    googleAppAuthState === 'signed_out' ? SIGN_IN_ROUTE : ACCOUNT_ROUTE;
+  const authLabel = googleAppAuthState === 'signed_out' ? 'Sign In' : 'Account';
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -27,6 +34,22 @@ export function AppLayout() {
                 {route.label}
               </NavLink>
             ))}
+            <NavLink
+              className={({ isActive }) =>
+                isActive ? 'nav-link is-active' : 'nav-link'
+              }
+              end
+              state={
+                googleAppAuthState === 'signed_out'
+                  ? {
+                      from: location.pathname,
+                    }
+                  : undefined
+              }
+              to={authRoute}
+            >
+              {authLabel}
+            </NavLink>
           </nav>
         </div>
       </header>

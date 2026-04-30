@@ -159,6 +159,43 @@ function formatChunkCount(chunkCount: number): string {
   return `${chunkCount} performance chunk${chunkCount === 1 ? '' : 's'}`;
 }
 
+function getCloudSyncStatusLabel(cloudSyncState: ScriptProject['cloudSyncState']): string {
+  if (cloudSyncState === 'synced') {
+    return 'Cloud synced';
+  }
+
+  if (cloudSyncState === 'syncing') {
+    return 'Cloud syncing';
+  }
+
+  if (cloudSyncState === 'sync_error') {
+    return 'Cloud sync error';
+  }
+
+  return 'Local only';
+}
+
+function getCloudSyncStatusNote(
+  cloudSyncState: ScriptProject['cloudSyncState'],
+  isCloudSyncEnabled: boolean,
+): string {
+  if (cloudSyncState === 'synced') {
+    return 'Google Drive is up to date for this script.';
+  }
+
+  if (cloudSyncState === 'syncing') {
+    return 'Google Drive sync is running in the background.';
+  }
+
+  if (cloudSyncState === 'sync_error') {
+    return 'Local save worked, but Google Drive sync needs another try.';
+  }
+
+  return isCloudSyncEnabled
+    ? 'Save this script to sync it to Google Drive.'
+    : 'This script is currently local only.';
+}
+
 function getRechunkConfirmationMessage(hasMultipleSections: boolean): string {
   if (hasMultipleSections) {
     return 'Chunk edits already exist. Click Confirm Re-chunk to replace them from the raw script. This will also collapse the project into a single Main section.';
@@ -172,7 +209,16 @@ export function EditorPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId: routeProjectId } = useParams();
-  const { isLibraryWriteBlocked, load, loadProject, save } = useScriptStorage();
+  const {
+    googleAppAuthState,
+    isLibraryWriteBlocked,
+    isGoogleCloudSyncEnabled,
+    load,
+    loadProject,
+    projects,
+    save,
+    syncProjectToGoogleDrive,
+  } = useScriptStorage();
   const isNewProjectRoute = location.pathname === '/editor/new';
   const [title, setTitle] = useState('');
   const [rawScript, setRawScript] = useState('');
@@ -181,6 +227,12 @@ export function EditorPage() {
     [],
   );
   const [chunkSourceRawScript, setChunkSourceRawScript] = useState('');
+  const [googleDriveFileId, setGoogleDriveFileId] = useState<
+    ScriptProject['googleDriveFileId']
+  >(undefined);
+  const [cloudSyncState, setCloudSyncState] = useState<
+    ScriptProject['cloudSyncState']
+  >('local_only');
   const [isBoundaryEditorOpen, setIsBoundaryEditorOpen] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
@@ -200,6 +252,7 @@ export function EditorPage() {
     hasChunkedData && rawScript !== chunkSourceRawScript;
   const hasMultipleSectionTemplates = sectionTemplates.length > 1;
   const isGenericEditorRoute = !isNewProjectRoute && !routeProjectId;
+  const hasMultipleSavedProjects = projects.length > 1;
   const editorTitle = title.trim() || 'Untitled script';
   const editorContextLabel = projectId ? 'Editing saved script' : 'New script';
 
@@ -212,6 +265,8 @@ export function EditorPage() {
     setGeneratedChunks([]);
     setSectionTemplates([]);
     setChunkSourceRawScript('');
+    setGoogleDriveFileId(undefined);
+    setCloudSyncState('local_only');
     setIsBoundaryEditorOpen(false);
     setProjectId(null);
     setCreatedAt(null);
@@ -230,6 +285,8 @@ export function EditorPage() {
     setGeneratedChunks(savedChunks);
     setSectionTemplates(createSectionTemplates(project.sections));
     setChunkSourceRawScript(project.chunkSourceRawScript);
+    setGoogleDriveFileId(project.googleDriveFileId);
+    setCloudSyncState(project.cloudSyncState);
     setIsBoundaryEditorOpen(false);
     setProjectId(project.id);
     setCreatedAt(project.createdAt);
@@ -339,6 +396,10 @@ export function EditorPage() {
       generatedChunks,
       sectionTemplates,
     );
+    const nextCloudSyncState =
+      googleAppAuthState === 'signed_in_drive_connected'
+        ? 'syncing'
+        : 'local_only';
 
     const nextProject: ScriptProject = {
       id: nextProjectId,
@@ -347,6 +408,8 @@ export function EditorPage() {
       chunkSourceRawScript: generatedChunks.length > 0
         ? chunkSourceRawScript
         : rawScript,
+      googleDriveFileId,
+      cloudSyncState: nextCloudSyncState,
       createdAt: nextCreatedAt,
       updatedAt: now,
       sections: nextSections,
@@ -368,21 +431,45 @@ export function EditorPage() {
 
     setProjectId(nextProjectId);
     setCreatedAt(nextCreatedAt);
+    setCloudSyncState(nextCloudSyncState);
     setSectionTemplates(createSectionTemplates(nextSections));
     setIsConfirmingRechunk(false);
     setLastSavedSnapshot(
       createEditorSnapshot(nextProject.title, nextProject.rawScript, generatedChunks),
     );
     setStatusMessage(
-      generatedChunks.length > 0
-        ? isChunkDataOutOfSync
-          ? 'Saved locally. Your current chunk structure was preserved even though it is out of sync with the latest raw script. Confirm Re-chunk when you are ready to replace it.'
-          : `Saved locally with ${formatChunkCount(generatedChunks.length)}. Open Performance when you are ready to record.`
-        : 'Saved locally as a raw script draft. Chunk it before opening Performance.',
+      nextCloudSyncState === 'syncing'
+        ? 'Saved locally. Google Drive sync is running in the background.'
+        : googleAppAuthState === 'signed_in'
+          ? 'Saved locally. Reconnect cloud sync in Scripts when you want Drive updates again.'
+          : generatedChunks.length > 0
+            ? isChunkDataOutOfSync
+              ? 'Saved locally. Your current chunk structure was preserved even though it is out of sync with the latest raw script. Confirm Re-chunk when you are ready to replace it.'
+              : `Saved locally with ${formatChunkCount(generatedChunks.length)}. Open Performance when you are ready to record.`
+            : 'Saved locally as a raw script draft. Chunk it before opening Performance.',
     );
 
     if (isNewProjectRoute) {
       navigate(`/editor/${nextProjectId}`, { replace: true });
+    }
+
+    if (nextCloudSyncState === 'syncing') {
+      void syncProjectToGoogleDrive(nextProjectId).then((syncResult) => {
+        if (syncResult.data) {
+          setGoogleDriveFileId(syncResult.data.googleDriveFileId);
+          setCloudSyncState(syncResult.data.cloudSyncState);
+        }
+
+        if (syncResult.status === 'success') {
+          setStatusMessage('Saved locally and synced to Google Drive.');
+          return;
+        }
+
+        setCloudSyncState('sync_error');
+        setStatusMessage(
+          'Saved locally, but Google Drive sync failed. Your local script is still safe.',
+        );
+      });
     }
   }
 
@@ -483,16 +570,45 @@ export function EditorPage() {
     <>
       <PageShell
         description={
-          isGenericEditorRoute
+          isGenericEditorRoute && hasMultipleSavedProjects
             ? 'You are editing the most recently updated script in your library. Open Scripts to choose a different saved project.'
             : 'Write or paste a raw script, chunk it into recording beats, adjust boundaries, and save the current project locally.'
         }
         title="Editor"
       >
         <section className="panel editor-panel">
+          {isGenericEditorRoute && hasMultipleSavedProjects ? (
+            <div className="route-context-notice" aria-live="polite">
+              <p className="route-context-note">
+                You are viewing the most recently updated script in your
+                library.
+              </p>
+              <button
+                className="text-link"
+                onClick={handleBackToScripts}
+                type="button"
+              >
+                Choose a Different Script
+              </button>
+            </div>
+          ) : null}
+
           <div className="script-identity editor-script-identity">
             <p className="script-context-label">{editorContextLabel}</p>
             <h2 className="script-identity-title">{editorTitle}</h2>
+            <div className="editor-cloud-sync-row">
+              <span
+                className={`script-status-badge sync-status-badge is-${cloudSyncState.replace('_', '-')}`}
+              >
+                {getCloudSyncStatusLabel(cloudSyncState)}
+              </span>
+              <p className="page-note">
+                {getCloudSyncStatusNote(
+                  cloudSyncState,
+                  isGoogleCloudSyncEnabled,
+                )}
+              </p>
+            </div>
           </div>
 
           <div className="field-group">

@@ -34,6 +34,12 @@ export type ScriptFocusUnderlineStyle =
   | 'dashed'
   | 'wavy';
 
+export type ProjectCloudSyncState =
+  | 'local_only'
+  | 'syncing'
+  | 'synced'
+  | 'sync_error';
+
 export interface ScriptChunk {
   id: EntityId;
   text: string;
@@ -70,6 +76,8 @@ export interface ScriptProject {
   title: string;
   rawScript: string;
   chunkSourceRawScript: string;
+  googleDriveFileId?: string;
+  cloudSyncState: ProjectCloudSyncState;
   createdAt: ISODateString;
   updatedAt: ISODateString;
   sections: ScriptSection[];
