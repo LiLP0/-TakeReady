@@ -10,11 +10,15 @@ export function PageShell({ title, description, children }: PageShellProps) {
   return (
     <section className="page-shell">
       <header className="page-header">
-        <p className="page-kicker">Script Chunking and Performance Reading</p>
-        <h1 className="page-title">{title}</h1>
-        <p className="page-description">{description}</p>
+        <div className="page-header-surface">
+          <p className="page-kicker">Script Chunking and Performance Reading</p>
+          <div className="page-header-copy">
+            <h1 className="page-title">{title}</h1>
+            <p className="page-description">{description}</p>
+          </div>
+        </div>
       </header>
-      {children}
+      <div className="page-content">{children}</div>
     </section>
   );
 }

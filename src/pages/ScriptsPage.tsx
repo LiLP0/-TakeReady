@@ -608,10 +608,6 @@ export function ScriptsPage() {
     }
   }
 
-  function handleBackHome(): void {
-    navigate('/');
-  }
-
   function handleCreateNewScript(): void {
     clearCleanupNotice();
     setPendingDeleteProjectId(null);
@@ -730,48 +726,17 @@ export function ScriptsPage() {
           <h2>Saved library needs recovery</h2>
           <p className="page-note">
             LexiCue found saved library data but could not read it. Import a
-            saved LexiCue JSON backup from above, or create and save a new
-            script to rebuild the local library.
+            saved LexiCue JSON backup from the top action row above, or create
+            and save a new script to rebuild the local library.
           </p>
-          <div className="action-row">
-            <button
-              className="text-link is-primary"
-              onClick={handleCreateNewScript}
-              type="button"
-            >
-              Create New Script
-            </button>
-            <button
-              className="text-link"
-              onClick={handleBackHome}
-              type="button"
-            >
-              Back to Home
-            </button>
-          </div>
         </section>
       ) : sortedProjects.length === 0 ? (
         <section className="panel scripts-empty">
           <h2>No saved scripts yet</h2>
           <p className="page-note">
-            Create and save a script from the Editor, then it will appear here.
+            Use Create New Script in the top action row above, then save from
+            the Editor and it will appear here.
           </p>
-          <div className="action-row">
-            <button
-              className="text-link is-primary"
-              onClick={handleCreateNewScript}
-              type="button"
-            >
-              Create New Script
-            </button>
-            <button
-              className="text-link"
-              onClick={handleBackHome}
-              type="button"
-            >
-              Back to Home
-            </button>
-          </div>
         </section>
       ) : (
         <>

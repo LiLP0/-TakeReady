@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 
 import { PageShell } from '../components/PageShell';
 import { usePageTitle } from '../hooks/usePageTitle';
@@ -42,19 +42,12 @@ export function SignInPage() {
   const [isFinishingSignIn, setIsFinishingSignIn] = useState(false);
   const googleSignInButtonRef = useRef<HTMLDivElement | null>(null);
   const redirectPath = getRedirectPath(location.state);
-
-  useEffect(() => {
-    if (!googleSignedInUser || isFinishingSignIn) {
-      return;
-    }
-
-    navigate(redirectPath, { replace: true });
-  }, [googleSignedInUser, isFinishingSignIn, navigate, redirectPath]);
+  const shouldRedirectToAccount = Boolean(googleSignedInUser) && !isFinishingSignIn;
 
   useEffect(() => {
     const buttonContainer = googleSignInButtonRef.current;
 
-    if (!buttonContainer || googleSignedInUser) {
+    if (!buttonContainer || shouldRedirectToAccount) {
       if (buttonContainer) {
         buttonContainer.innerHTML = '';
       }
@@ -117,20 +110,24 @@ export function SignInPage() {
       isCancelled = true;
       buttonContainer.innerHTML = '';
     };
-  }, [googleSignedInUser]);
+  }, [shouldRedirectToAccount]);
+
+  if (shouldRedirectToAccount) {
+    return <Navigate replace to={ACCOUNT_ROUTE} />;
+  }
 
   return (
     <PageShell
-      description="Sign in with your Google account to restore your LexiCue account and reconnect cloud sync when Google Drive access is available."
+      description="Sign in with Google to use LexiCue on this device and reconnect cloud sync when Google Drive is available."
       title="Sign In"
     >
       <section className="panel sign-in-panel">
         <div className="sign-in-copy">
-          <h2>Welcome back to LexiCue</h2>
+          <h2>Sign in to LexiCue</h2>
           <p className="page-note">
-            Sign in with Google to restore your LexiCue account on this device.
-            Local scripts still stay available, and cloud sync reconnects when
-            Google Drive access is active for your session.
+            Use your Google account to open LexiCue here. Local scripts stay on
+            this device, and cloud sync reconnects when Google Drive is
+            available.
           </p>
         </div>
 
