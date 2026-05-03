@@ -235,6 +235,10 @@ function getProjectCloudSyncLabel(project: ScriptProject): string {
   return 'Local only';
 }
 
+function formatSelectedProjectCount(count: number): string {
+  return `${count} script${count === 1 ? '' : 's'} selected`;
+}
+
 export function ScriptsPage() {
   usePageTitle('Scripts');
   const navigate = useNavigate();
@@ -267,9 +271,17 @@ export function ScriptsPage() {
   const [cleanupMessage, setCleanupMessage] = useState<string | null>(
     null,
   );
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>(
+    [],
+  );
+  const [isConfirmingBulkDelete, setIsConfirmingBulkDelete] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const sortedProjects = sortProjects(projects, sortMode);
   const filteredProjects = filterProjectsByTitle(sortedProjects, searchTerm);
+  const selectedProjectIdSet = new Set(selectedProjectIds);
+  const selectedProjects = sortedProjects.filter((project) =>
+    selectedProjectIdSet.has(project.id),
+  );
   const statusEntries: LibraryStatus[] = [
     ...(libraryLoadError
       ? [
@@ -311,6 +323,23 @@ export function ScriptsPage() {
     clearProjectCleanupSummary();
   }, [projectCleanupSummary]);
 
+  useEffect(() => {
+    setSelectedProjectIds((currentSelectedProjectIds) => {
+      const availableProjectIds = new Set(projects.map((project) => project.id));
+      const nextSelectedProjectIds = currentSelectedProjectIds.filter((projectId) =>
+        availableProjectIds.has(projectId),
+      );
+
+      return nextSelectedProjectIds.length === currentSelectedProjectIds.length
+        ? currentSelectedProjectIds
+        : nextSelectedProjectIds;
+    });
+  }, [projects]);
+
+  useEffect(() => {
+    setIsConfirmingBulkDelete(false);
+  }, [selectedProjectIds]);
+
   function setStatusFromActionResult(
     result: {
       message: string;
@@ -339,6 +368,7 @@ export function ScriptsPage() {
 
   function handleDelete(projectId: string): void {
     clearCleanupNotice();
+    setIsConfirmingBulkDelete(false);
 
     if (isLibraryWriteBlocked) {
       setLibraryStatus({
@@ -370,6 +400,11 @@ export function ScriptsPage() {
 
     setPendingDeleteProjectId(null);
     setRenamingProjectId(null);
+    setSelectedProjectIds((currentSelectedProjectIds) =>
+      currentSelectedProjectIds.filter(
+        (selectedProjectId) => selectedProjectId !== projectId,
+      ),
+    );
     setLibraryStatus(null);
   }
 
@@ -377,16 +412,19 @@ export function ScriptsPage() {
     clearCleanupNotice();
     setSearchTerm(nextSearchTerm);
     setPendingDeleteProjectId(null);
+    setIsConfirmingBulkDelete(false);
   }
 
   function handleSortChange(nextSortMode: SortMode): void {
     clearCleanupNotice();
     setSortMode(nextSortMode);
     setPendingDeleteProjectId(null);
+    setIsConfirmingBulkDelete(false);
   }
 
   function handleDuplicate(project: ScriptProject): void {
     clearCleanupNotice();
+    setIsConfirmingBulkDelete(false);
 
     if (isLibraryWriteBlocked) {
       setLibraryStatus({
@@ -417,6 +455,7 @@ export function ScriptsPage() {
 
   function handleStartRename(project: ScriptProject): void {
     clearCleanupNotice();
+    setIsConfirmingBulkDelete(false);
 
     if (isLibraryWriteBlocked) {
       setLibraryStatus({
@@ -436,10 +475,12 @@ export function ScriptsPage() {
     clearCleanupNotice();
     setRenamingProjectId(null);
     setRenameTitle('');
+    setIsConfirmingBulkDelete(false);
   }
 
   function handleSaveRename(project: ScriptProject): void {
     clearCleanupNotice();
+    setIsConfirmingBulkDelete(false);
 
     if (isLibraryWriteBlocked) {
       setLibraryStatus({
@@ -492,6 +533,7 @@ export function ScriptsPage() {
 
   function handleExportProject(project: ScriptProject): void {
     clearCleanupNotice();
+    setIsConfirmingBulkDelete(false);
     const scriptTitle = getScriptTitle(project);
     const filename = `${getSafeFilenamePart(scriptTitle)}.json`;
 
@@ -513,6 +555,7 @@ export function ScriptsPage() {
 
   function handleExportAll(): void {
     clearCleanupNotice();
+    setIsConfirmingBulkDelete(false);
 
     if (projects.length === 0) {
       setLibraryStatus({
@@ -536,6 +579,126 @@ export function ScriptsPage() {
         type: 'error',
       });
     }
+  }
+
+  function handleToggleProjectSelection(projectId: string): void {
+    clearCleanupNotice();
+    setPendingDeleteProjectId(null);
+    setSelectedProjectIds((currentSelectedProjectIds) =>
+      currentSelectedProjectIds.includes(projectId)
+        ? currentSelectedProjectIds.filter(
+            (selectedProjectId) => selectedProjectId !== projectId,
+          )
+        : [...currentSelectedProjectIds, projectId],
+    );
+  }
+
+  function handleClearSelection(): void {
+    clearCleanupNotice();
+    setPendingDeleteProjectId(null);
+    setSelectedProjectIds([]);
+  }
+
+  function handleExportSelected(): void {
+    clearCleanupNotice();
+    setPendingDeleteProjectId(null);
+    setRenamingProjectId(null);
+    setIsConfirmingBulkDelete(false);
+
+    if (selectedProjects.length === 0) {
+      return;
+    }
+
+    try {
+      if (selectedProjects.length === 1) {
+        const selectedProject = selectedProjects[0];
+        const scriptTitle = getScriptTitle(selectedProject);
+        const filename = `${getSafeFilenamePart(scriptTitle)}.json`;
+
+        downloadJsonFile(filename, selectedProject);
+        setLibraryStatus({
+          message: `Exported "${scriptTitle}" as ${filename}. Keep it somewhere safe as a backup.`,
+          type: 'success',
+        });
+        return;
+      }
+
+      downloadJsonFile('lexicue-selected-scripts.json', selectedProjects);
+      setLibraryStatus({
+        message: `Exported ${selectedProjects.length} selected scripts as lexicue-selected-scripts.json.`,
+        type: 'success',
+      });
+    } catch {
+      setLibraryStatus({
+        message:
+          'Export Selected failed. Try again or export the full library instead.',
+        type: 'error',
+      });
+    }
+  }
+
+  function handleDeleteSelected(): void {
+    clearCleanupNotice();
+    setPendingDeleteProjectId(null);
+
+    if (isLibraryWriteBlocked) {
+      setLibraryStatus({
+        message: getWriteBlockedStatusMessage(),
+        type: 'error',
+      });
+      return;
+    }
+
+    if (!isConfirmingBulkDelete) {
+      setIsConfirmingBulkDelete(true);
+      setLibraryStatus(null);
+      return;
+    }
+
+    const nextSelectedProjectIds: string[] = [];
+    let deletedProjectCount = 0;
+
+    for (const projectId of selectedProjectIds) {
+      const didDelete = deleteProject(projectId);
+
+      if (didDelete === 'success') {
+        deletedProjectCount += 1;
+        continue;
+      }
+
+      nextSelectedProjectIds.push(projectId);
+    }
+
+    setSelectedProjectIds(nextSelectedProjectIds);
+    setRenamingProjectId(null);
+    setPendingDeleteProjectId(null);
+    setIsConfirmingBulkDelete(false);
+
+    if (deletedProjectCount === 0) {
+      setLibraryStatus({
+        message:
+          'Delete Selected failed. Review the selected scripts and try again.',
+        type: 'error',
+      });
+      return;
+    }
+
+    if (nextSelectedProjectIds.length > 0) {
+      setLibraryStatus({
+        message: `Deleted ${deletedProjectCount} selected script${
+          deletedProjectCount === 1 ? '' : 's'
+        }. The remaining selected scripts could not be deleted.`,
+        type: 'error',
+      });
+      return;
+    }
+
+    setLibraryStatus({
+      message: `Deleted ${deletedProjectCount} selected script${
+        deletedProjectCount === 1 ? '' : 's'
+      }.`,
+      type: 'success',
+    });
   }
 
   async function handleImportFile(
@@ -586,6 +749,8 @@ export function ScriptsPage() {
       }
 
       loadProjects();
+      setSelectedProjectIds([]);
+      setIsConfirmingBulkDelete(false);
       setPendingDeleteProjectId(null);
       setRenamingProjectId(null);
       setLibraryStatus({
@@ -610,6 +775,7 @@ export function ScriptsPage() {
 
   function handleCreateNewScript(): void {
     clearCleanupNotice();
+    setIsConfirmingBulkDelete(false);
     setPendingDeleteProjectId(null);
     setRenamingProjectId(null);
     setLibraryStatus(null);
@@ -670,6 +836,53 @@ export function ScriptsPage() {
             type="file"
           />
         </div>
+
+        {selectedProjectIds.length > 0 ? (
+          <div
+            className="scripts-bulk-actions"
+            aria-label="Bulk actions for selected scripts"
+          >
+            <p className="scripts-bulk-selection-count">
+              {formatSelectedProjectCount(selectedProjectIds.length)}
+            </p>
+            <div className="scripts-bulk-action-row">
+              <button
+                className="text-link"
+                onClick={handleExportSelected}
+                type="button"
+              >
+                Export Selected
+              </button>
+              <button
+                className={`text-link ${
+                  isConfirmingBulkDelete ? 'is-danger' : ''
+                }`}
+                aria-label={
+                  isConfirmingBulkDelete
+                    ? `Confirm delete ${formatSelectedProjectCount(selectedProjectIds.length)}`
+                    : `Delete ${formatSelectedProjectCount(selectedProjectIds.length)}`
+                }
+                disabled={isLibraryWriteBlocked}
+                onClick={handleDeleteSelected}
+                title={
+                  isLibraryWriteBlocked
+                    ? 'Delete is temporarily blocked while unreadable saved library data is protected from overwrite.'
+                    : undefined
+                }
+                type="button"
+              >
+                {isConfirmingBulkDelete ? 'Confirm Delete' : 'Delete'}
+              </button>
+              <button
+                className="text-link scripts-bulk-clear-action"
+                onClick={handleClearSelection}
+                type="button"
+              >
+                Clear Selection
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {sortedProjects.length > 0 ? (
           <div className="scripts-toolbar-controls">
@@ -755,51 +968,73 @@ export function ScriptsPage() {
                 const isChunked = chunkCount > 0;
                 const isConfirmingDelete = pendingDeleteProjectId === project.id;
                 const isRenaming = renamingProjectId === project.id;
+                const isSelected = selectedProjectIdSet.has(project.id);
 
                 return (
-                  <article className="panel script-card" key={project.id}>
-                    <div className="script-card-copy">
-                      {isRenaming ? (
+                  <article
+                    className={`panel script-card ${
+                      isSelected ? 'is-selected' : ''
+                    }`}
+                    key={project.id}
+                  >
+                    <div className="script-card-main">
+                      <div className="script-card-selection">
                         <input
-                          aria-label={`Rename script ${project.title.trim() || 'Untitled script'}`}
-                          autoFocus
-                          className="field-input script-rename-input"
-                          onChange={(event) =>
-                            setRenameTitle(event.target.value)
+                          aria-label={`Select script ${getScriptTitle(project)}`}
+                          checked={isSelected}
+                          className="script-card-checkbox"
+                          onChange={() =>
+                            handleToggleProjectSelection(project.id)
                           }
-                          type="text"
-                          value={renameTitle}
+                          type="checkbox"
                         />
-                      ) : (
-                        <h2 className="script-card-title">
-                          {project.title.trim() || 'Untitled script'}
-                        </h2>
-                      )}
-                      <p className="page-note">
-                        Updated {formatUpdatedAt(project.updatedAt)}
-                      </p>
-                      <div className="script-card-meta-row">
-                        <span
-                          className={`script-status-badge ${
-                            isChunked ? 'is-chunked' : 'is-raw'
-                          }`}
-                        >
-                          {isChunked ? 'Chunked' : 'Raw draft'}
-                        </span>
-                        <p className="script-card-meta">
-                          {chunkCount} chunk{chunkCount === 1 ? '' : 's'}
-                        </p>
-                        <span
-                          className={`script-status-badge sync-status-badge is-${project.cloudSyncState.replace('_', '-')}`}
-                        >
-                          {getProjectCloudSyncLabel(project)}
-                        </span>
+                      </div>
+
+                      <div className="script-card-copy">
+                        {isRenaming ? (
+                          <input
+                            aria-label={`Rename script ${project.title.trim() || 'Untitled script'}`}
+                            autoFocus
+                            className="field-input script-rename-input"
+                            onChange={(event) =>
+                              setRenameTitle(event.target.value)
+                            }
+                            type="text"
+                            value={renameTitle}
+                          />
+                        ) : (
+                          <h2 className="script-card-title">
+                            {project.title.trim() || 'Untitled script'}
+                          </h2>
+                        )}
+                        <div className="script-card-supporting">
+                          <p className="script-card-updated">
+                            Updated {formatUpdatedAt(project.updatedAt)}
+                          </p>
+                          <div className="script-card-meta-row">
+                            <span
+                              className={`script-status-badge ${
+                                isChunked ? 'is-chunked' : 'is-raw'
+                              }`}
+                            >
+                              {isChunked ? 'Chunked' : 'Raw draft'}
+                            </span>
+                            <p className="script-card-meta">
+                              {chunkCount} chunk{chunkCount === 1 ? '' : 's'}
+                            </p>
+                            <span
+                              className={`script-status-badge sync-status-badge is-${project.cloudSyncState.replace('_', '-')}`}
+                            >
+                              {getProjectCloudSyncLabel(project)}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
                     <div className="script-card-actions">
                       <div
-                        className="script-card-action-group"
+                        className="script-card-action-group is-open"
                         aria-label="Open script"
                       >
                         <span className="script-action-label">Open</span>
@@ -808,7 +1043,7 @@ export function ScriptsPage() {
                           onClick={() => handleOpenEditor(project.id)}
                           type="button"
                         >
-                          Open in Editor
+                          Open in Create
                         </button>
                         <button
                           className="text-link"
@@ -816,17 +1051,17 @@ export function ScriptsPage() {
                           onClick={() => handleOpenPerformance(project.id)}
                           title={
                             chunkCount === 0
-                              ? 'Chunk this script before opening Performance.'
-                              : 'Open the recording view for this script.'
+                              ? 'Chunk this script before opening Cue Cards.'
+                              : 'Open the cue card view for this script.'
                           }
                           type="button"
                         >
-                          Open Performance
+                          Open Cue Cards
                         </button>
                       </div>
 
                       <div
-                        className="script-card-action-group"
+                        className="script-card-action-group is-manage"
                         aria-label="Manage script"
                       >
                         <span className="script-action-label">Manage</span>

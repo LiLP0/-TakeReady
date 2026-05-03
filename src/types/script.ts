@@ -86,7 +86,7 @@ export interface ScriptProject {
 
 export interface ScriptFocusModeSettings {
   enabled: boolean;
-  emphasizedPortion: number;
+  lettersEmphasized: number;
   minimumWordLength: number;
   frequency: number;
   emphasisStyle: ScriptFocusEmphasisStyle;

@@ -1,5 +1,6 @@
 import {
   type FormEvent,
+  type MouseEvent as ReactMouseEvent,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -118,8 +119,8 @@ function formatElapsedTime(totalSeconds: number): string {
   return `${paddedMinutes}:${paddedSeconds}`;
 }
 
-function getEmphasizedPortionMode(value: number): string {
-  return [20, 30, 40, 50].includes(value) ? String(value) : 'custom';
+function getLettersEmphasizedMode(value: number): string {
+  return [1, 2, 3, 4].includes(value) ? String(value) : 'custom';
 }
 
 function getMinimumWordLengthMode(value: number): string {
@@ -148,7 +149,7 @@ function getFocusModeButtonLabel(isScriptFocusPanelOpen: boolean): string {
 }
 
 export function PerformancePage() {
-  usePageTitle('Performance');
+  usePageTitle('Cue Cards');
   const navigate = useNavigate();
   const { projectId: routeProjectId } = useParams();
   const {
@@ -179,15 +180,13 @@ export function PerformancePage() {
   const playbackChunks = getPlaybackChunks(project);
   const totalChunks = playbackChunks.length;
   const currentPlaybackChunk = playbackChunks[currentIndex] ?? null;
-  const previousPlaybackChunk = playbackChunks[currentIndex - 1] ?? null;
-  const nextPlaybackChunk = playbackChunks[currentIndex + 1] ?? null;
   const isLastChunk = totalChunks > 0 && currentIndex === totalChunks - 1;
   const isScriptFocusEnabled = scriptFocusModeSettings.enabled;
   const scriptFocusLayoutKey = isScriptFocusEnabled
     ? JSON.stringify({
         applyToNumbers: scriptFocusModeSettings.applyToNumbers,
         emphasisStyle: scriptFocusModeSettings.emphasisStyle,
-        emphasizedPortion: scriptFocusModeSettings.emphasizedPortion,
+        lettersEmphasized: scriptFocusModeSettings.lettersEmphasized,
         frequency: scriptFocusModeSettings.frequency,
         ignoreShortFunctionWords:
           scriptFocusModeSettings.ignoreShortFunctionWords,
@@ -203,6 +202,12 @@ export function PerformancePage() {
   const scriptFocusPreviewText = getScriptFocusPreviewText(
     currentPlaybackChunk?.chunk.text ?? project?.rawScript ?? '',
   );
+  const isAllWordsEligibilityMode =
+    getMinimumWordLengthMode(scriptFocusModeSettings.minimumWordLength) ===
+    'all';
+  const isCustomLettersEmphasizedMode =
+    getLettersEmphasizedMode(scriptFocusModeSettings.lettersEmphasized) ===
+    'custom';
 
   useEffect(() => {
     loadProjects();
@@ -398,6 +403,20 @@ export function PerformancePage() {
     setIsMirrorMode((currentMirrorMode) => !currentMirrorMode);
   }
 
+  function handleChunkSurfaceClick(
+    event: ReactMouseEvent<HTMLElement>,
+  ): void {
+    const cueCardBounds = event.currentTarget.getBoundingClientRect();
+    const clickOffset = event.clientX - cueCardBounds.left;
+
+    if (clickOffset <= cueCardBounds.width / 2) {
+      handlePrevious();
+      return;
+    }
+
+    handleNext();
+  }
+
   function updateScriptFocusSettings(
     partialSettings: Partial<ScriptFocusModeSettings>,
   ): void {
@@ -415,13 +434,20 @@ export function PerformancePage() {
     });
   }
 
-  function handleEmphasizedPortionPresetChange(nextValue: string): void {
+  function handleLettersEmphasizedPresetChange(nextValue: string): void {
     if (nextValue === 'custom') {
+      updateScriptFocusSettings({
+        lettersEmphasized:
+          getLettersEmphasizedMode(scriptFocusModeSettings.lettersEmphasized) ===
+          'custom'
+            ? scriptFocusModeSettings.lettersEmphasized
+            : 5,
+      });
       return;
     }
 
     updateScriptFocusSettings({
-      emphasizedPortion: Number.parseInt(nextValue, 10),
+      lettersEmphasized: Number.parseInt(nextValue, 10),
     });
   }
 
@@ -491,14 +517,14 @@ export function PerformancePage() {
       return (
         <PageShell
           description="That saved script could not be found in your local LexiCue library."
-          title="Performance"
+          title="Cue Cards"
         >
           <section className="panel missing-project">
             <p className="script-context-label">Missing script</p>
             <h2>Script not found</h2>
             <p className="page-note">
-              This performance route points to a script that is no longer
-              saved. Head back to Scripts to choose another project.
+              This Cue Cards route points to a script that is no longer saved.
+              Head back to Scripts to choose another project.
             </p>
             <div className="action-row">
               <button
@@ -523,14 +549,14 @@ export function PerformancePage() {
 
     return (
       <PageShell
-        description="Load a saved LexiCue project here when you are ready to record chunk by chunk."
-        title="Performance"
+        description="Load a saved LexiCue project here when you are ready to read it as cue cards."
+        title="Cue Cards"
       >
         <section className="panel performance-empty">
           <h2>No saved script yet</h2>
           <p className="page-note">
-            Save a chunked project from the Editor, then come back here to read
-            it during recording.
+            Save a chunked project from Create, then come back here to read it
+            as cue cards.
           </p>
           <div className="action-row">
             <button
@@ -550,13 +576,13 @@ export function PerformancePage() {
     return (
       <PageShell
         description="This saved project is ready, but it does not have chunked script beats yet."
-        title="Performance"
+        title="Cue Cards"
       >
         <section className="panel performance-empty">
           <h2>No chunks to read yet</h2>
           <p className="page-note">
             Open the project in the Editor, run Chunk Script, save it, then
-            return here for the recording view.
+            return here for the cue card view.
           </p>
           <div className="action-row">
             <button
@@ -584,9 +610,9 @@ export function PerformancePage() {
       description={
         isGenericPerformanceRoute && hasMultipleSavedProjects
           ? 'You are reading the most recently updated chunked script in your library. Open Scripts to choose a different project.'
-          : 'Read your saved script one performance-friendly chunk at a time.'
+          : 'Read your saved script one cue card at a time.'
       }
-      title="Performance"
+      title="Cue Cards"
     >
       <section className="panel performance-reader" ref={performanceReaderRef}>
         {isGenericPerformanceRoute && hasMultipleSavedProjects ? (
@@ -604,20 +630,20 @@ export function PerformancePage() {
           </div>
         ) : null}
 
-        <div className="performance-meta">
-          <div className="performance-meta-copy">
-            <p className="performance-label">Recording script</p>
-            <h2 className="performance-project-title">
-              {project.title.trim() || 'Untitled script'}
-            </h2>
-            {currentPlaybackChunk.sectionTitle ? (
-              <p className="performance-section-title">
-                <span>Section</span>
-                {currentPlaybackChunk.sectionTitle}
-              </p>
-            ) : null}
-          </div>
-          <div className="performance-meta-actions">
+        <div className="performance-header">
+          <div className="performance-meta">
+            <div className="performance-meta-copy">
+              <p className="performance-label">Cue card script</p>
+              <h2 className="performance-project-title">
+                {project.title.trim() || 'Untitled script'}
+              </h2>
+              {currentPlaybackChunk.sectionTitle ? (
+                <p className="performance-section-title">
+                  <span>Section</span>
+                  {currentPlaybackChunk.sectionTitle}
+                </p>
+              ) : null}
+            </div>
             <p
               className="performance-position"
               aria-label={`Chunk ${currentIndex + 1} of ${totalChunks}`}
@@ -626,6 +652,64 @@ export function PerformancePage() {
               <strong>{currentIndex + 1}</strong>
               <span>of {totalChunks}</span>
             </p>
+          </div>
+
+          <div
+            className="performance-progress"
+            role="progressbar"
+            aria-label="Script progress"
+            aria-valuemin={1}
+            aria-valuemax={totalChunks}
+            aria-valuenow={currentIndex + 1}
+          >
+            <span style={{ width: `${progressPercent}%` }} />
+          </div>
+        </div>
+
+        <div className="performance-reading-surface">
+          <div className="performance-reading-stack">
+            <div className="performance-chunk-shell">
+              <article
+                className={`performance-chunk ${
+                  currentPlaybackChunk.chunk.emojiCue ? 'has-emoji-cue' : ''
+                }`}
+                aria-live="polite"
+                onClick={handleChunkSurfaceClick}
+                ref={chunkContainerRef}
+              >
+                {currentPlaybackChunk.chunk.emojiCue ? (
+                  <span
+                    className="performance-emoji-cue"
+                    aria-label="Delivery emoji cue"
+                  >
+                    {currentPlaybackChunk.chunk.emojiCue}
+                  </span>
+                ) : null}
+                <p
+                  className={`performance-chunk-text ${
+                    isMirrorMode ? 'is-mirrored' : ''
+                  } script-focus-render`}
+                  ref={chunkTextRef}
+                  style={{ fontSize: `${chunkFontSize}px` }}
+                >
+                  {renderScriptFocusText(
+                    currentPlaybackChunk.chunk.text,
+                    currentPlaybackChunk.chunk.id,
+                  )}
+                </p>
+              </article>
+            </div>
+          </div>
+
+          {isLastChunk ? (
+            <p className="performance-end-note" aria-live="polite">
+              End of script. You are on the final chunk.
+            </p>
+          ) : null}
+        </div>
+
+        <div className="performance-toolbar">
+          <div className="performance-meta-actions">
             <button
               className="text-link performance-meta-button"
               onClick={handleOpenEditor}
@@ -648,7 +732,7 @@ export function PerformancePage() {
               onClick={handleToggleFullscreen}
               title={
                 isFullscreenSupported
-                  ? 'Toggle browser fullscreen for recording.'
+                  ? 'Toggle browser fullscreen for cue card reading.'
                   : 'Fullscreen is not supported in this browser.'
               }
               type="button"
@@ -656,58 +740,79 @@ export function PerformancePage() {
               {isFullscreenActive ? 'Exit Fullscreen' : 'Fullscreen'}
             </button>
           </div>
-        </div>
 
-        <div
-          className="performance-progress"
-          role="progressbar"
-          aria-label="Script progress"
-          aria-valuemin={1}
-          aria-valuemax={totalChunks}
-          aria-valuenow={currentIndex + 1}
-        >
-          <span style={{ width: `${progressPercent}%` }} />
-        </div>
-
-        <div className="performance-session-controls">
-          <p className="performance-session-timer">
-            <span>Session</span>
-            <strong>{formatElapsedTime(elapsedSeconds)}</strong>
-          </p>
-          <form className="performance-jump-control" onSubmit={handleJumpSubmit}>
-            <label className="performance-jump-label" htmlFor="chunk-jump">
-              Jump
-            </label>
-            <input
-              className="field-input performance-jump-input"
-              id="chunk-jump"
-              inputMode="numeric"
-              max={totalChunks}
-              min={1}
-              onBlur={handleJumpBlur}
-              onChange={(event) => setJumpValue(event.target.value)}
-              type="number"
-              value={jumpValue}
-            />
-            <button className="text-link performance-meta-button" type="submit">
-              Go
+          <div className="performance-session-controls">
+            <p className="performance-session-timer">
+              <span>Session</span>
+              <strong>{formatElapsedTime(elapsedSeconds)}</strong>
+            </p>
+            <form
+              className="performance-jump-control"
+              onSubmit={handleJumpSubmit}
+            >
+              <label className="performance-jump-label" htmlFor="chunk-jump">
+                Jump
+              </label>
+              <input
+                className="field-input performance-jump-input"
+                id="chunk-jump"
+                inputMode="numeric"
+                max={totalChunks}
+                min={1}
+                onBlur={handleJumpBlur}
+                onChange={(event) => setJumpValue(event.target.value)}
+                type="number"
+                value={jumpValue}
+              />
+              <button
+                className="text-link performance-meta-button"
+                type="submit"
+              >
+                Go
+              </button>
+            </form>
+            <button
+              className="text-link performance-meta-button"
+              disabled={currentIndex === 0 && elapsedSeconds === 0}
+              onClick={handleRestart}
+              type="button"
+            >
+              Restart
             </button>
-          </form>
-          <button
-            className="text-link performance-meta-button"
-            disabled={currentIndex === 0 && elapsedSeconds === 0}
-            onClick={handleRestart}
-            type="button"
-          >
-            Restart
-          </button>
-          <button
-            className="text-link performance-meta-button"
-            onClick={handleToggleMirrorMode}
-            type="button"
-          >
-            {isMirrorMode ? 'Mirror Off' : 'Mirror Mode'}
-          </button>
+            <button
+              className="text-link performance-meta-button"
+              onClick={handleToggleMirrorMode}
+              type="button"
+            >
+              {isMirrorMode ? 'Mirror Off' : 'Mirror Mode'}
+            </button>
+          </div>
+
+          <div className="action-row performance-actions">
+            <button
+              className="text-link"
+              disabled={currentIndex === 0}
+              onClick={handlePrevious}
+              type="button"
+            >
+              Previous
+            </button>
+            <button
+              className="text-link is-primary"
+              disabled={currentIndex === totalChunks - 1}
+              onClick={handleNext}
+              type="button"
+            >
+              Next
+            </button>
+            <button
+              className="text-link"
+              onClick={handleBackToHome}
+              type="button"
+            >
+              Back to Home
+            </button>
+          </div>
         </div>
 
         {isScriptFocusPanelOpen ? (
@@ -719,8 +824,8 @@ export function PerformancePage() {
               <div>
                 <h2>Script Focus Mode</h2>
                 <p className="page-note">
-                  Word Anchors are optional visual guides that can make long
-                  scripts easier to scan. They do not change your original
+                  Word Anchors are optional visual guides that gently emphasize
+                  the start of selected words. They do not change your original
                   script.
                 </p>
                 <p className="page-note">
@@ -756,10 +861,16 @@ export function PerformancePage() {
               <label className="script-focus-toggle">
                 <input
                   checked={scriptFocusModeSettings.ignoreShortFunctionWords}
+                  disabled={isAllWordsEligibilityMode}
                   onChange={(event) =>
                     updateScriptFocusSettings({
                       ignoreShortFunctionWords: event.target.checked,
                     })
+                  }
+                  title={
+                    isAllWordsEligibilityMode
+                      ? 'All words always includes short function words.'
+                      : undefined
                   }
                   type="checkbox"
                 />
@@ -780,56 +891,65 @@ export function PerformancePage() {
               </label>
             </div>
 
+            {isAllWordsEligibilityMode ? (
+              <p className="page-note">
+                All words includes short function words and turns off
+                minimum-length filtering.
+              </p>
+            ) : null}
+
             <div className="script-focus-grid">
               <div className="field-group">
                 <label
                   className="field-label"
-                  htmlFor="performance-script-focus-portion-preset"
+                  htmlFor="performance-script-focus-letters-preset"
                 >
-                  Emphasized portion preset
+                  Letters emphasized
                 </label>
                 <select
                   className="field-input"
-                  id="performance-script-focus-portion-preset"
+                  id="performance-script-focus-letters-preset"
                   onChange={(event) =>
-                    handleEmphasizedPortionPresetChange(event.target.value)
+                    handleLettersEmphasizedPresetChange(event.target.value)
                   }
-                  value={getEmphasizedPortionMode(
-                    scriptFocusModeSettings.emphasizedPortion,
+                  value={getLettersEmphasizedMode(
+                    scriptFocusModeSettings.lettersEmphasized,
                   )}
                 >
-                  <option value="20">20%</option>
-                  <option value="30">30%</option>
-                  <option value="40">40%</option>
-                  <option value="50">50%</option>
+                  <option value="1">1 letter</option>
+                  <option value="2">2 letters</option>
+                  <option value="3">3 letters</option>
+                  <option value="4">4 letters</option>
                   <option value="custom">Custom</option>
                 </select>
               </div>
 
-              <div className="field-group">
-                <label
-                  className="field-label"
-                  htmlFor="performance-script-focus-portion"
-                >
-                  Custom emphasized portion: {scriptFocusModeSettings.emphasizedPortion}%
-                </label>
-                <input
-                  id="performance-script-focus-portion"
-                  max={70}
-                  min={10}
-                  onChange={(event) =>
-                    updateScriptFocusSettings({
-                      emphasizedPortion: Number.parseInt(
-                        event.target.value,
-                        10,
-                      ),
-                    })
-                  }
-                  step={1}
-                  type="range"
-                  value={scriptFocusModeSettings.emphasizedPortion}
-                />
-              </div>
+              {isCustomLettersEmphasizedMode ? (
+                <div className="field-group">
+                  <label
+                    className="field-label"
+                    htmlFor="performance-script-focus-letters"
+                  >
+                    Custom letters emphasized
+                  </label>
+                  <input
+                    className="field-input"
+                    id="performance-script-focus-letters"
+                    max={8}
+                    min={1}
+                    onChange={(event) =>
+                      updateScriptFocusSettings({
+                        lettersEmphasized: Number.parseInt(
+                          event.target.value || '1',
+                          10,
+                        ),
+                      })
+                    }
+                    type="number"
+                    value={scriptFocusModeSettings.lettersEmphasized}
+                  />
+                </div>
+              ) : null}
 
               <div className="field-group">
                 <label
@@ -1039,121 +1159,6 @@ export function PerformancePage() {
             </div>
           </section>
         ) : null}
-
-        <div className="performance-reading-stack">
-          {previousPlaybackChunk ? (
-            <aside
-              className="performance-chunk-preview is-previous"
-              aria-label="Previous chunk preview"
-            >
-              <span>Previous</span>
-              <p className="script-focus-render">
-                {renderScriptFocusText(
-                  previousPlaybackChunk.chunk.text,
-                  `previous-${previousPlaybackChunk.chunk.id}`,
-                )}
-              </p>
-            </aside>
-          ) : null}
-
-          <div className="performance-chunk-shell">
-            <button
-              aria-label="Go to previous chunk"
-              className="performance-nav-zone is-previous"
-              disabled={currentIndex === 0}
-              onClick={handlePrevious}
-              type="button"
-            >
-              <span aria-hidden="true">◀</span>
-            </button>
-
-            <article
-              className={`performance-chunk ${
-                currentPlaybackChunk.chunk.emojiCue ? 'has-emoji-cue' : ''
-              }`}
-              aria-live="polite"
-              ref={chunkContainerRef}
-            >
-              {currentPlaybackChunk.chunk.emojiCue ? (
-                <span
-                  className="performance-emoji-cue"
-                  aria-label="Delivery emoji cue"
-                >
-                  {currentPlaybackChunk.chunk.emojiCue}
-                </span>
-              ) : null}
-              <p
-                className={`performance-chunk-text ${
-                  isMirrorMode ? 'is-mirrored' : ''
-                } script-focus-render`}
-                ref={chunkTextRef}
-                style={{ fontSize: `${chunkFontSize}px` }}
-              >
-                {renderScriptFocusText(
-                  currentPlaybackChunk.chunk.text,
-                  currentPlaybackChunk.chunk.id,
-                )}
-              </p>
-            </article>
-
-            <button
-              aria-label="Go to next chunk"
-              className="performance-nav-zone is-next"
-              disabled={currentIndex === totalChunks - 1}
-              onClick={handleNext}
-              type="button"
-            >
-              <span aria-hidden="true">▶</span>
-            </button>
-          </div>
-
-          {nextPlaybackChunk ? (
-            <aside
-              className="performance-chunk-preview is-next"
-              aria-label="Next chunk preview"
-            >
-              <span>Next</span>
-              <p className="script-focus-render">
-                {renderScriptFocusText(
-                  nextPlaybackChunk.chunk.text,
-                  `next-${nextPlaybackChunk.chunk.id}`,
-                )}
-              </p>
-            </aside>
-          ) : null}
-        </div>
-
-        {isLastChunk ? (
-          <p className="performance-end-note" aria-live="polite">
-            End of script. You are on the final chunk.
-          </p>
-        ) : null}
-
-        <div className="action-row performance-actions">
-          <button
-            className="text-link"
-            disabled={currentIndex === 0}
-            onClick={handlePrevious}
-            type="button"
-          >
-            Previous
-          </button>
-          <button
-            className="text-link is-primary"
-            disabled={currentIndex === totalChunks - 1}
-            onClick={handleNext}
-            type="button"
-          >
-            Next
-          </button>
-          <button
-            className="text-link"
-            onClick={handleBackToHome}
-            type="button"
-          >
-            Back to Home
-          </button>
-        </div>
       </section>
     </PageShell>
   );

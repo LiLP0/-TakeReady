@@ -37,6 +37,7 @@ export function HomePage() {
     <PageShell
       description="LexiCue helps creators break long scripts into focused recording cards with delivery notes, pause cues, B-roll ideas, progress tracking, and dyslexia-friendly reading controls."
       title="LexiCue Studio"
+      variant="hero"
     >
       <div className="panel-grid">
         <section className="panel panel-half">
@@ -46,31 +47,33 @@ export function HomePage() {
             project you want to edit or record later. Import and export also
             live in Scripts.
           </p>
-          <div className="link-row">
+          <div className="home-action-cluster">
             <button
-              className="text-link"
+              className="text-link is-primary home-primary-action"
               onClick={handleCreateNewScript}
               type="button"
             >
               Create New Script
             </button>
-            <button
-              className="text-link"
-              onClick={handleOpenScriptsLibrary}
-              type="button"
-            >
-              Open Scripts Library
-            </button>
-            <button
-              className="text-link"
-              onClick={handleGoToImportInScripts}
-              type="button"
-            >
-              Go to Import in Scripts
-            </button>
+            <div className="home-secondary-actions">
+              <button
+                className="text-link home-secondary-action"
+                onClick={handleOpenScriptsLibrary}
+                type="button"
+              >
+                Open Scripts Library
+              </button>
+              <button
+                className="text-link home-secondary-action"
+                onClick={handleGoToImportInScripts}
+                type="button"
+              >
+                Go to Import in Scripts
+              </button>
+            </div>
           </div>
           {statusMessage ? (
-            <p aria-live="polite" className="page-note">
+            <p aria-live="polite" className="page-note home-action-status">
               {statusMessage}
             </p>
           ) : null}

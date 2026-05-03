@@ -189,10 +189,7 @@ export function AccountPage() {
   }
 
   return (
-    <PageShell
-      description="Review your Google account details, reconnect cloud sync, and manage how LexiCue works with Google Drive on this device."
-      title="Account"
-    >
+    <PageShell title="Account">
       {status ? (
         <p
           aria-live="polite"

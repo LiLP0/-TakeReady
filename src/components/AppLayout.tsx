@@ -19,6 +19,19 @@ function getNavigationLabel(path: string, defaultLabel: string): string {
   return defaultLabel;
 }
 
+function getNavLinkClassName(
+  isActive: boolean,
+  isAccountAction = false,
+): string {
+  return [
+    'nav-link',
+    isAccountAction ? 'nav-link-auth' : '',
+    isActive ? 'is-active' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
 export function AppLayout() {
   const location = useLocation();
   const { googleAppAuthState } = useScriptStorage();
@@ -43,9 +56,7 @@ export function AppLayout() {
                 {appRoutes.map((route) => (
                   <NavLink
                     key={route.path}
-                    className={({ isActive }) =>
-                      isActive ? 'nav-link is-active' : 'nav-link'
-                    }
+                    className={({ isActive }) => getNavLinkClassName(isActive)}
                     end={route.path === '/'}
                     to={route.path}
                   >
@@ -54,7 +65,7 @@ export function AppLayout() {
                 ))}
                 <NavLink
                   className={({ isActive }) =>
-                    isActive ? 'nav-link is-active' : 'nav-link'
+                    getNavLinkClassName(isActive, true)
                   }
                   end
                   state={

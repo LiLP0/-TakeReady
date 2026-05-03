@@ -122,15 +122,6 @@ export function SignInPage() {
       title="Sign In"
     >
       <section className="panel sign-in-panel">
-        <div className="sign-in-copy">
-          <h2>Sign in to LexiCue</h2>
-          <p className="page-note">
-            Use your Google account to open LexiCue here. Local scripts stay on
-            this device, and cloud sync reconnects when Google Drive is
-            available.
-          </p>
-        </div>
-
         <div className="scripts-google-sign-in-button" ref={googleSignInButtonRef} />
 
         {status ? (

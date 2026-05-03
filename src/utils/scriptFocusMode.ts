@@ -3,7 +3,7 @@ import type {
   ScriptFocusUnderlineStyle,
 } from '../types/script';
 
-const DEFAULT_EMPHASIS_COLOR = '#60a5fa';
+const DEFAULT_EMPHASIS_COLOR = '#86cf97';
 const DEFAULT_FUNCTION_WORDS = new Set([
   'the',
   'and',
@@ -21,6 +21,8 @@ const WORD_OR_NUMBER_OR_OTHER_REGEX =
   /(\p{L}+(?:['’-]\p{L}+)*)|(\p{N}+(?:[:.,/-]\p{N}+)*)|([^\p{L}\p{N}]+)/gu;
 const LETTER_CHARACTER_REGEX = /\p{L}/u;
 const NUMBER_CHARACTER_REGEX = /\p{N}/u;
+const WORD_CONNECTOR_CHARACTER_REGEX = /['’-]/u;
+const NUMBER_SEPARATOR_CHARACTER_REGEX = /[:.,/-]/u;
 const HEX_COLOR_REGEX = /^#(?:[0-9a-fA-F]{3}){1,2}$/;
 const CSS_COLOR_REGEX = /^[a-zA-Z]+$/;
 const PREVIEW_TEXT =
@@ -42,10 +44,10 @@ export type ScriptFocusEmphasisInlineStyle = {
 
 export const DEFAULT_SCRIPT_FOCUS_MODE_SETTINGS: ScriptFocusModeSettings = {
   enabled: false,
-  emphasizedPortion: 35,
-  minimumWordLength: 1,
-  frequency: 1,
-  emphasisStyle: 'color+underline',
+  lettersEmphasized: 2,
+  minimumWordLength: 4,
+  frequency: 2,
+  emphasisStyle: 'color',
   emphasisColor: DEFAULT_EMPHASIS_COLOR,
   underlineStyle: 'solid',
   underlineThickness: 1,
@@ -125,14 +127,45 @@ function countTokenLength(token: string, tokenType: 'number' | 'word'): number {
   );
 }
 
+function isAllWordsEligibilityMode(
+  settings: ScriptFocusModeSettings,
+): boolean {
+  return settings.minimumWordLength <= 1;
+}
+
+function migrateLettersEmphasizedFromLegacyPercentage(
+  value: unknown,
+): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_SCRIPT_FOCUS_MODE_SETTINGS.lettersEmphasized;
+  }
+
+  const normalizedPercentage = clampNumber(Math.round(value), 10, 70);
+
+  if (normalizedPercentage <= 20) {
+    return 1;
+  }
+
+  if (normalizedPercentage <= 40) {
+    return 2;
+  }
+
+  if (normalizedPercentage <= 55) {
+    return 3;
+  }
+
+  return 4;
+}
+
 function getAnchorLength(
   tokenLength: number,
-  emphasizedPortion: number,
+  lettersEmphasized: number,
 ): number {
-  return Math.max(
-    1,
-    Math.min(tokenLength, Math.round((tokenLength * emphasizedPortion) / 100)),
-  );
+  if (tokenLength <= 1) {
+    return 1;
+  }
+
+  return clampNumber(lettersEmphasized, 1, Math.max(1, tokenLength - 1));
 }
 
 function splitTokenAtAnchor(
@@ -167,10 +200,107 @@ function splitTokenAtAnchor(
   };
 }
 
+function moveTrailingBoundaryCharacters(
+  anchor: string,
+  remainder: string,
+  boundaryRegex: RegExp,
+): {
+  anchor: string;
+  remainder: string;
+} {
+  let nextAnchor = anchor;
+  let nextRemainder = remainder;
+
+  while (nextAnchor) {
+    const anchorCharacters = Array.from(nextAnchor);
+    const trailingCharacter = anchorCharacters[anchorCharacters.length - 1];
+
+    if (!boundaryRegex.test(trailingCharacter)) {
+      break;
+    }
+
+    nextAnchor = anchorCharacters.slice(0, -1).join('');
+    nextRemainder = `${trailingCharacter}${nextRemainder}`;
+  }
+
+  return {
+    anchor: nextAnchor,
+    remainder: nextRemainder,
+  };
+}
+
+function moveSeparatedSuffixToRemainder(
+  anchor: string,
+  remainder: string,
+  boundaryRegex: RegExp,
+): {
+  anchor: string;
+  remainder: string;
+} {
+  if (!anchor || !remainder) {
+    return {
+      anchor,
+      remainder,
+    };
+  }
+
+  const anchorCharacters = Array.from(anchor);
+  let lastBoundaryIndex = -1;
+
+  for (let index = anchorCharacters.length - 1; index >= 1; index -= 1) {
+    if (boundaryRegex.test(anchorCharacters[index])) {
+      lastBoundaryIndex = index;
+      break;
+    }
+  }
+
+  if (lastBoundaryIndex <= 0 || lastBoundaryIndex >= anchorCharacters.length) {
+    return {
+      anchor,
+      remainder,
+    };
+  }
+
+  return {
+    anchor: anchorCharacters.slice(0, lastBoundaryIndex).join(''),
+    remainder: `${anchorCharacters.slice(lastBoundaryIndex).join('')}${remainder}`,
+  };
+}
+
+function normalizeAnchorSplit(
+  anchor: string,
+  remainder: string,
+  tokenType: 'number' | 'word',
+): {
+  anchor: string;
+  remainder: string;
+} {
+  const boundaryRegex =
+    tokenType === 'word'
+      ? WORD_CONNECTOR_CHARACTER_REGEX
+      : NUMBER_SEPARATOR_CHARACTER_REGEX;
+
+  const withoutTrailingBoundary = moveTrailingBoundaryCharacters(
+    anchor,
+    remainder,
+    boundaryRegex,
+  );
+
+  return moveSeparatedSuffixToRemainder(
+    withoutTrailingBoundary.anchor,
+    withoutTrailingBoundary.remainder,
+    boundaryRegex,
+  );
+}
+
 function isIgnoredFunctionWord(
   token: string,
   settings: ScriptFocusModeSettings,
 ): boolean {
+  if (isAllWordsEligibilityMode(settings)) {
+    return false;
+  }
+
   if (!settings.ignoreShortFunctionWords) {
     return false;
   }
@@ -198,12 +328,18 @@ export function normalizeScriptFocusModeSettings(
         settings.enabled,
         DEFAULT_SCRIPT_FOCUS_MODE_SETTINGS.enabled,
       ) || legacyWordAnchorsEnabled,
-    emphasizedPortion: normalizeNumber(
-      settings.emphasizedPortion,
-      DEFAULT_SCRIPT_FOCUS_MODE_SETTINGS.emphasizedPortion,
-      10,
-      70,
-    ),
+    lettersEmphasized:
+      typeof settings.lettersEmphasized === 'number' &&
+      Number.isFinite(settings.lettersEmphasized)
+        ? normalizeNumber(
+            settings.lettersEmphasized,
+            DEFAULT_SCRIPT_FOCUS_MODE_SETTINGS.lettersEmphasized,
+            1,
+            8,
+          )
+        : migrateLettersEmphasizedFromLegacyPercentage(
+            settings.emphasizedPortion,
+          ),
     minimumWordLength: normalizeNumber(
       settings.minimumWordLength,
       DEFAULT_SCRIPT_FOCUS_MODE_SETTINGS.minimumWordLength,
@@ -278,8 +414,12 @@ export function getScriptFocusRenderableSegments(
     const token = wordToken ?? numberToken ?? '';
     const tokenType = wordToken ? 'word' : 'number';
     const tokenLength = countTokenLength(token, tokenType);
+    const minimumEligibleLength =
+      tokenType === 'word' && isAllWordsEligibilityMode(settings)
+        ? 1
+        : settings.minimumWordLength;
     const canEmphasize =
-      tokenLength >= settings.minimumWordLength &&
+      tokenLength >= minimumEligibleLength &&
       (tokenType === 'word' || settings.applyToNumbers) &&
       (tokenType !== 'word' || !isIgnoredFunctionWord(token, settings));
 
@@ -303,10 +443,15 @@ export function getScriptFocusRenderableSegments(
       continue;
     }
 
-    const { anchor, remainder } = splitTokenAtAnchor(
+    const splitToken = splitTokenAtAnchor(
       token,
       tokenType,
-      getAnchorLength(tokenLength, settings.emphasizedPortion),
+      getAnchorLength(tokenLength, settings.lettersEmphasized),
+    );
+    const { anchor, remainder } = normalizeAnchorSplit(
+      splitToken.anchor,
+      splitToken.remainder,
+      tokenType,
     );
 
     segments.push({

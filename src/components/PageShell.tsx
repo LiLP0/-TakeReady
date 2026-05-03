@@ -2,19 +2,29 @@ import type { ReactNode } from 'react';
 
 type PageShellProps = {
   title: string;
-  description: string;
+  description?: string;
   children: ReactNode;
+  variant?: 'compact' | 'hero';
 };
 
-export function PageShell({ title, description, children }: PageShellProps) {
+export function PageShell({
+  title,
+  description,
+  children,
+  variant = 'compact',
+}: PageShellProps) {
   return (
-    <section className="page-shell">
+    <section className={`page-shell is-${variant}`}>
       <header className="page-header">
         <div className="page-header-surface">
-          <p className="page-kicker">Script Chunking and Performance Reading</p>
+          {variant === 'hero' ? (
+            <p className="page-kicker">Script Chunking and Performance Reading</p>
+          ) : null}
           <div className="page-header-copy">
             <h1 className="page-title">{title}</h1>
-            <p className="page-description">{description}</p>
+            {description ? (
+              <p className="page-description">{description}</p>
+            ) : null}
           </div>
         </div>
       </header>

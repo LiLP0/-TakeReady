@@ -175,27 +175,6 @@ function getCloudSyncStatusLabel(cloudSyncState: ScriptProject['cloudSyncState']
   return 'Local only';
 }
 
-function getCloudSyncStatusNote(
-  cloudSyncState: ScriptProject['cloudSyncState'],
-  isCloudSyncEnabled: boolean,
-): string {
-  if (cloudSyncState === 'synced') {
-    return 'Google Drive is up to date for this script.';
-  }
-
-  if (cloudSyncState === 'syncing') {
-    return 'Google Drive sync is running in the background.';
-  }
-
-  if (cloudSyncState === 'sync_error') {
-    return 'Local save worked, but Google Drive sync needs another try.';
-  }
-
-  return isCloudSyncEnabled
-    ? 'Save this script to sync it to Google Drive.'
-    : 'This script is currently local only.';
-}
-
 function getRechunkConfirmationMessage(hasMultipleSections: boolean): string {
   if (hasMultipleSections) {
     return 'Chunk edits already exist. Click Confirm Re-chunk to replace them from the raw script. This will also collapse the project into a single Main section.';
@@ -205,14 +184,13 @@ function getRechunkConfirmationMessage(hasMultipleSections: boolean): string {
 }
 
 export function EditorPage() {
-  usePageTitle('Editor');
+  usePageTitle('Create');
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId: routeProjectId } = useParams();
   const {
     googleAppAuthState,
     isLibraryWriteBlocked,
-    isGoogleCloudSyncEnabled,
     load,
     loadProject,
     projects,
@@ -253,7 +231,6 @@ export function EditorPage() {
   const hasMultipleSectionTemplates = sectionTemplates.length > 1;
   const isGenericEditorRoute = !isNewProjectRoute && !routeProjectId;
   const hasMultipleSavedProjects = projects.length > 1;
-  const editorTitle = title.trim() || 'Untitled script';
   const editorContextLabel = projectId ? 'Editing saved script' : 'New script';
 
   function resetEditorState(
@@ -535,8 +512,7 @@ export function EditorPage() {
   if (missingProjectId) {
     return (
       <PageShell
-        description="That saved script could not be found in your local LexiCue library."
-        title="Editor"
+        title="Create"
       >
         <section className="panel missing-project">
           <p className="script-context-label">Missing script</p>
@@ -569,12 +545,7 @@ export function EditorPage() {
   return (
     <>
       <PageShell
-        description={
-          isGenericEditorRoute && hasMultipleSavedProjects
-            ? 'You are editing the most recently updated script in your library. Open Scripts to choose a different saved project.'
-            : 'Write or paste a raw script, chunk it into recording beats, adjust boundaries, and save the current project locally.'
-        }
-        title="Editor"
+        title="Create"
       >
         <section className="panel editor-panel">
           {isGenericEditorRoute && hasMultipleSavedProjects ? (
@@ -593,55 +564,177 @@ export function EditorPage() {
             </div>
           ) : null}
 
-          <div className="script-identity editor-script-identity">
-            <p className="script-context-label">{editorContextLabel}</p>
-            <h2 className="script-identity-title">{editorTitle}</h2>
-            <div className="editor-cloud-sync-row">
-              <span
-                className={`script-status-badge sync-status-badge is-${cloudSyncState.replace('_', '-')}`}
-              >
-                {getCloudSyncStatusLabel(cloudSyncState)}
+          <section
+            className="editor-writing-surface"
+            aria-label="Script writing workspace"
+          >
+            <div className="editor-compact-meta" aria-label="Editor metadata">
+              <span>{editorContextLabel}</span>
+              <span>
+                {hasChunkedData
+                  ? formatChunkCount(generatedChunks.length)
+                  : 'Raw draft'}
               </span>
-              <p className="page-note">
-                {getCloudSyncStatusNote(
-                  cloudSyncState,
-                  isGoogleCloudSyncEnabled,
-                )}
-              </p>
+              <span>{getCloudSyncStatusLabel(cloudSyncState)}</span>
             </div>
-          </div>
 
-          <div className="field-group">
-            <label className="field-label" htmlFor="script-title">
-              Script title
-            </label>
-            <input
-              className="field-input"
-              id="script-title"
-              onChange={(event) => handleTitleChange(event.target.value)}
-              placeholder="Enter a working title"
-              type="text"
-              value={title}
-            />
-          </div>
+            <div className="field-group editor-title-field">
+              <input
+                aria-label="Script title"
+                className="field-input editor-title-input"
+                id="script-title"
+                onChange={(event) => handleTitleChange(event.target.value)}
+                placeholder="Enter a working title"
+                type="text"
+                value={title}
+              />
+            </div>
 
-          <div className="field-group">
-            <label className="field-label" htmlFor="raw-script">
-              Raw script
-            </label>
-            <textarea
-              className="field-textarea"
-              id="raw-script"
-              onChange={(event) => handleRawScriptChange(event.target.value)}
-              placeholder="Paste or write your rough script here."
-              value={rawScript}
-            />
-          </div>
+            <div className="field-group editor-raw-script-field">
+              <textarea
+                aria-label="Raw script"
+                className="field-textarea editor-raw-script-input"
+                id="raw-script"
+                onChange={(event) => handleRawScriptChange(event.target.value)}
+                placeholder="Paste or write your rough script here."
+                value={rawScript}
+              />
+            </div>
+            <div className="action-row editor-action-row">
+              <div className="editor-action-group is-main">
+                <button
+                  className={`text-link editor-action-secondary ${
+                    isConfirmingRechunk ? 'is-warning' : ''
+                  }`}
+                  onClick={handleChunkScript}
+                  type="button"
+                >
+                  {isConfirmingRechunk ? 'Confirm Re-chunk' : 'Chunk Script'}
+                </button>
+                <button
+                  className="text-link is-primary editor-action-primary"
+                  disabled={isLibraryWriteBlocked}
+                  onClick={handleSaveScript}
+                  title={
+                    isLibraryWriteBlocked
+                      ? 'Saving is temporarily blocked while unreadable saved library data is protected from overwrite.'
+                      : undefined
+                  }
+                  type="button"
+                >
+                  Save Script
+                </button>
+              </div>
 
-          <div className="field-group">
-            <h2>Chunk preview</h2>
-            {generatedChunks.length > 0 ? (
-              <>
+              {hasChunkedData ? (
+                <div className="editor-action-group is-utility">
+                  {generatedChunks.length > 0 ? (
+                    <button
+                      className="text-link editor-action-utility"
+                      disabled={isChunkDataOutOfSync}
+                      onClick={handleOpenBoundaryEditor}
+                      title={
+                        isChunkDataOutOfSync
+                          ? 'Confirm Re-chunk before editing chunk boundaries again.'
+                          : 'Adjust chunk boundaries against the current raw script.'
+                      }
+                      type="button"
+                    >
+                      Edit Chunk Boundaries
+                    </button>
+                  ) : null}
+                  {hasChunkedData ? (
+                    <button
+                      className="text-link editor-action-utility"
+                      disabled={hasUnsavedChanges}
+                      onClick={handleOpenPerformance}
+                      title={
+                        hasUnsavedChanges
+                          ? 'Save this chunked project before opening Performance.'
+                          : 'Open the saved recording view.'
+                      }
+                      type="button"
+                    >
+                      Open Performance
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="editor-action-group is-tertiary">
+                <button
+                  className="text-link editor-action-tertiary"
+                  onClick={handleBackToHome}
+                  type="button"
+                >
+                  Back to Home
+                </button>
+              </div>
+            </div>
+
+            <p
+              aria-live="polite"
+              className={`editor-save-state ${
+                hasUnsavedChanges || isChunkDataOutOfSync
+                  ? 'has-unsaved'
+                  : 'is-saved'
+              }`}
+            >
+              {isChunkDataOutOfSync
+                ? hasUnsavedChanges
+                  ? `Raw script changed. Save to keep these ${formatChunkCount(generatedChunks.length)} while they remain out of sync, or confirm Re-chunk to replace them.`
+                  : `Saved locally, but these ${formatChunkCount(generatedChunks.length)} are still out of sync with the raw script. Confirm Re-chunk when you are ready to replace them.`
+                : hasUnsavedChanges
+                  ? hasChunkedData
+                    ? `Unsaved changes. Save these ${formatChunkCount(generatedChunks.length)} before opening Performance.`
+                    : 'Unsaved changes.'
+                  : hasChunkedData
+                    ? `Saved locally with ${formatChunkCount(generatedChunks.length)} ready for Performance.`
+                    : 'No unsaved changes.'}
+            </p>
+
+            {!hasChunkedData ? (
+              <p className="page-note editor-preview-hint">
+                Chunk preview appears here after you click Chunk Script.
+              </p>
+            ) : null}
+
+            {isChunkDataOutOfSync ? (
+              <p className="page-note editor-action-note">
+                Boundary editing uses the current raw script. Confirm Re-chunk
+                first to safely edit boundaries again.
+              </p>
+            ) : null}
+
+            <div className="editor-feedback-stack">
+              {isChunkDataOutOfSync ? (
+                <p aria-live="polite" className="status-message is-error">
+                  Raw script changed after chunking. Your current chunks,
+                  boundary edits, and delivery cues are still preserved. Save
+                  will keep this chunk structure until you confirm Re-chunk.
+                </p>
+              ) : null}
+
+              {isLibraryWriteBlocked ? (
+                <p aria-live="polite" className="status-message is-error">
+                  Saved library data could not be read. Saving is temporarily
+                  blocked to avoid overwriting recoverable data. Open Scripts
+                  before replacing the library.
+                </p>
+              ) : null}
+
+              {statusMessage ? (
+                <p aria-live="polite" className="status-message">
+                  {statusMessage}
+                </p>
+              ) : null}
+            </div>
+          </section>
+
+          {hasChunkedData ? (
+            <section className="editor-preview-surface" aria-label="Chunk preview">
+              <div className="editor-section-header">
+                <h2 className="editor-preview-title">Chunk preview</h2>
                 <div className="editor-chunk-summary" aria-live="polite">
                   <span>{formatChunkCount(generatedChunks.length)}</span>
                   <span
@@ -660,175 +753,59 @@ export function EditorPage() {
                         : 'Saved locally'}
                   </span>
                 </div>
+              </div>
 
-                <ol className="chunk-preview-list">
-                  {generatedChunks.map((chunk, index) => (
-                    <li className="chunk-preview-item" key={chunk.id}>
-                      <span className="chunk-preview-number">
-                        {index + 1}
-                      </span>
-                      <div className="chunk-preview-body">
-                        <div className="chunk-preview-text-row">
-                          <p className="chunk-preview-text">{chunk.text}</p>
-                          <span
-                            className={`chunk-preview-emoji ${
-                              chunk.emojiCue ? 'has-cue' : ''
-                            }`}
-                            aria-label={
-                              chunk.emojiCue
-                                ? `Delivery cue ${chunk.emojiCue}`
-                                : 'No delivery cue'
-                            }
-                          >
-                            {chunk.emojiCue || 'No cue'}
-                          </span>
-                        </div>
-                        <label
-                          className="chunk-emoji-control"
-                          htmlFor={`chunk-emoji-${chunk.id}`}
+              <ol className="chunk-preview-list">
+                {generatedChunks.map((chunk, index) => (
+                  <li className="chunk-preview-item" key={chunk.id}>
+                    <span className="chunk-preview-number">
+                      {index + 1}
+                    </span>
+                    <div className="chunk-preview-body">
+                      <div className="chunk-preview-text-row">
+                        <p className="chunk-preview-text">{chunk.text}</p>
+                        <span
+                          className={`chunk-preview-emoji ${
+                            chunk.emojiCue ? 'has-cue' : ''
+                          }`}
+                          aria-label={
+                            chunk.emojiCue
+                              ? `Delivery cue ${chunk.emojiCue}`
+                              : 'No delivery cue'
+                          }
                         >
-                          Delivery cue
-                          <select
-                            className="field-input chunk-emoji-select"
-                            id={`chunk-emoji-${chunk.id}`}
-                            onChange={(event) =>
-                              handleChunkEmojiCueChange(
-                                chunk.id,
-                                event.target.value,
-                              )
-                            }
-                            value={chunk.emojiCue ?? ''}
-                          >
-                            <option value="">None</option>
-                            {DELIVERY_EMOJI_CUES.map((cue) => (
-                              <option key={cue.emoji} value={cue.emoji}>
-                                {cue.emoji} {cue.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                          {chunk.emojiCue || 'No cue'}
+                        </span>
                       </div>
-                    </li>
-                  ))}
-                </ol>
-              </>
-            ) : (
-              <p className="page-note">
-                {rawScript.trim()
-                  ? 'Your chunk preview will appear here after you click Chunk Script. Then you can fine-tune chunk boundaries before saving.'
-                  : 'Paste or write a rough script above, then turn it into short recording beats.'}
-              </p>
-            )}
-          </div>
-
-          {isChunkDataOutOfSync ? (
-            <p aria-live="polite" className="status-message is-error">
-              Raw script changed after chunking. Your current chunks, boundary
-              edits, and delivery cues are still preserved. Save will keep this
-              chunk structure until you confirm Re-chunk.
-            </p>
-          ) : null}
-
-          {isLibraryWriteBlocked ? (
-            <p aria-live="polite" className="status-message is-error">
-              Saved library data could not be read. Saving is temporarily
-              blocked to avoid overwriting recoverable data. Open Scripts before
-              replacing the library.
-            </p>
-          ) : null}
-
-          <p
-            aria-live="polite"
-            className={`editor-save-state ${
-              hasUnsavedChanges || isChunkDataOutOfSync
-                ? 'has-unsaved'
-                : 'is-saved'
-            }`}
-          >
-            {isChunkDataOutOfSync
-              ? hasUnsavedChanges
-                ? `Raw script changed. Save to keep these ${formatChunkCount(generatedChunks.length)} while they remain out of sync, or confirm Re-chunk to replace them.`
-                : `Saved locally, but these ${formatChunkCount(generatedChunks.length)} are still out of sync with the raw script. Confirm Re-chunk when you are ready to replace them.`
-              : hasUnsavedChanges
-                ? hasChunkedData
-                  ? `Unsaved changes. Save these ${formatChunkCount(generatedChunks.length)} before opening Performance.`
-                  : 'Unsaved changes.'
-                : hasChunkedData
-                  ? `Saved locally with ${formatChunkCount(generatedChunks.length)} ready for Performance.`
-                  : 'No unsaved changes.'}
-          </p>
-
-          <div className="action-row">
-            <button
-              className={`text-link ${isConfirmingRechunk ? 'is-warning' : ''}`}
-              onClick={handleChunkScript}
-              type="button"
-            >
-              {isConfirmingRechunk ? 'Confirm Re-chunk' : 'Chunk Script'}
-            </button>
-            {generatedChunks.length > 0 ? (
-              <button
-                className="text-link"
-                disabled={isChunkDataOutOfSync}
-                onClick={handleOpenBoundaryEditor}
-                title={
-                  isChunkDataOutOfSync
-                    ? 'Confirm Re-chunk before editing chunk boundaries again.'
-                    : 'Adjust chunk boundaries against the current raw script.'
-                }
-                type="button"
-              >
-                Edit Chunk Boundaries
-              </button>
-            ) : null}
-            <button
-              className="text-link is-primary"
-              disabled={isLibraryWriteBlocked}
-              onClick={handleSaveScript}
-              title={
-                isLibraryWriteBlocked
-                  ? 'Saving is temporarily blocked while unreadable saved library data is protected from overwrite.'
-                  : undefined
-              }
-              type="button"
-            >
-              Save Script
-            </button>
-            {hasChunkedData ? (
-              <button
-                className="text-link"
-                disabled={hasUnsavedChanges}
-                onClick={handleOpenPerformance}
-                title={
-                  hasUnsavedChanges
-                    ? 'Save this chunked project before opening Performance.'
-                    : 'Open the saved recording view.'
-                }
-                type="button"
-              >
-                Open Performance
-              </button>
-            ) : null}
-            <button
-              className="text-link"
-              onClick={handleBackToHome}
-              type="button"
-            >
-              Back to Home
-            </button>
-          </div>
-
-          {isChunkDataOutOfSync ? (
-            <p className="page-note editor-action-note">
-              Boundary editing uses the current raw script. Confirm Re-chunk
-              first to safely edit boundaries again.
-            </p>
-          ) : null}
-
-          {statusMessage ? (
-            <p aria-live="polite" className="status-message">
-              {statusMessage}
-            </p>
+                      <label
+                        className="chunk-emoji-control"
+                        htmlFor={`chunk-emoji-${chunk.id}`}
+                      >
+                        Delivery cue
+                        <select
+                          className="field-input chunk-emoji-select"
+                          id={`chunk-emoji-${chunk.id}`}
+                          onChange={(event) =>
+                            handleChunkEmojiCueChange(
+                              chunk.id,
+                              event.target.value,
+                            )
+                          }
+                          value={chunk.emojiCue ?? ''}
+                        >
+                          <option value="">None</option>
+                          {DELIVERY_EMOJI_CUES.map((cue) => (
+                            <option key={cue.emoji} value={cue.emoji}>
+                              {cue.emoji} {cue.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </section>
           ) : null}
         </section>
       </PageShell>
